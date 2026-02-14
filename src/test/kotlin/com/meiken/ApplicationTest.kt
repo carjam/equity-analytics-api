@@ -16,7 +16,10 @@ class ApplicationTest {
         application { module() }
         val response = client.get("/health")
         assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals("OK", response.bodyAsText())
+        val body = response.bodyAsText()
+        kotlin.test.assertTrue(body.contains("ok"), "Expected health body to contain 'ok', got: $body")
+        kotlin.test.assertTrue(body.contains("Service is operational"), "Expected health body to contain message, got: $body")
+        kotlin.test.assertTrue(body.contains("dependencies"), "Expected health body to include dependencies, got: $body")
     }
 
     @Test
