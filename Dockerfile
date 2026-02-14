@@ -16,4 +16,6 @@ EXPOSE 8080
 # API key can be set at build time (ARG) or at runtime (-e ALPHA_VANTAGE_API_KEY=...)
 ARG ALPHA_VANTAGE_API_KEY
 ENV ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
-CMD ["java", "-jar", "meiken.jar"]
+# Tune JVM for containers: heap, G1GC, pause target
+ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+CMD ["sh", "-c", "java $JAVA_OPTS -jar meiken.jar"]

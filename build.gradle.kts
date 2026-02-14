@@ -35,6 +35,7 @@ dependencies {
     implementation("io.ktor:ktor-server-metrics-micrometer:$ktorVersion")
     implementation("io.ktor:ktor-server-auth:$ktorVersion")
     implementation("io.ktor:ktor-server-rate-limit:$ktorVersion")
+    implementation("io.ktor:ktor-server-compression:$ktorVersion")
     
     // API key hashing (for future key storage)
     implementation("at.favre.lib:bcrypt:0.10.2")

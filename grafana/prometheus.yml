@@ -1,0 +1,17 @@
+# Example Prometheus config for scraping meiken
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'meiken'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['localhost:8080']
+    # For Kubernetes, use pod discovery:
+    # kubernetes_sd_configs:
+    #   - role: pod
+    # relabel_configs:
+    #   - source_labels: [__meta_kubernetes_pod_label_app]
+    #     action: keep
+    #     regex: meiken

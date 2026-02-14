@@ -219,4 +219,37 @@ object Metrics {
         "HALF_OPEN" -> 2
         else -> -1
     }
+
+    // --- Performance: parallel_fetch_duration_seconds, response_size_bytes, parallel_operations_total ---
+
+    fun recordParallelFetchDuration(seconds: Double) {
+        registry?.let { r ->
+            Timer.builder("parallel_fetch_duration_seconds")
+                .description("Duration of parallel symbol fetches (e.g. alpha target+benchmark)")
+                .tag("app", "meiken")
+                .register(r)
+                .record((seconds * 1_000).toLong(), TimeUnit.MILLISECONDS)
+        }
+    }
+
+    fun recordResponseSizeBytes(endpoint: String, sizeBytes: Long) {
+        registry?.let { r ->
+            io.micrometer.core.instrument.DistributionSummary.builder("response_size_bytes")
+                .description("Response body size in bytes")
+                .tag("app", "meiken")
+                .tag("endpoint", endpoint)
+                .register(r)
+                .record(sizeBytes.toDouble())
+        }
+    }
+
+    fun recordParallelOperationsTotal(count: Int) {
+        registry?.let { r ->
+            Counter.builder("parallel_operations_total")
+                .description("Number of parallel operations (e.g. concurrent symbol fetches)")
+                .tag("app", "meiken")
+                .register(r)
+                .increment(count.toDouble())
+        }
+    }
 }

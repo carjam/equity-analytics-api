@@ -45,6 +45,7 @@ fun Application.configureRouting(
 ) {
     routing {
         get("/health") {
+            call.response.headers.append("Cache-Control", "no-cache")
             val (status, dependencies, system) = buildHealthDetails(marketDataService, analyticsCache, circuitBreaker, isShuttingDown)
             val response = EnhancedHealthResponse(
                 status = status,
@@ -58,10 +59,15 @@ fun Application.configureRouting(
             call.respondText(body, ContentType.Application.Json, code)
         }
         get("/metrics") {
+            call.response.headers.append("Cache-Control", "no-store")
             val body = prometheusRegistry?.scrape() ?: ""
             call.respondText(body, ContentType.Text.Plain, HttpStatusCode.OK)
         }
         route("api/v1") {
+            intercept(ApplicationCallPipeline.Call) {
+                call.response.headers.append("Cache-Control", "public, max-age=300")
+                proceed()
+            }
             if (apiKeysEnabled && apiKeyManager != null) {
                 intercept(ApplicationCallPipeline.Call) {
                     if (!call.validateApiKey(apiKeyManager)) return@intercept

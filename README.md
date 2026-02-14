@@ -267,6 +267,70 @@ The API uses **Resilience4j** for circuit breaker, retry, timeouts, and graceful
 - **Health:** `GET /health` → `dependencies[].circuit_breaker` for `alpha_vantage` (state, failure_rate, slow_call_rate).
 - **When circuit is OPEN:** Reduce traffic to Alpha Vantage, check upstream health and rate limits; after `waitDurationInOpenState` the circuit moves to HALF_OPEN and a few test calls are allowed.
 
+## Performance
+
+### Response compression
+
+- **Ktor Compression** plugin: gzip and deflate enabled when `meiken.performance.compression.enabled` is true (default).
+- **Config:** `meiken.performance.compression` in `application.conf`: `minSize` (bytes, default 1024), `level` (1–9, default 6).
+- **Content-Encoding:** Set automatically by the plugin when the client sends `Accept-Encoding: gzip` or `deflate`.
+
+### Caching strategy
+
+- **In-memory (default):** Caffeine cache for symbol analytics; single instance only. Cache is **non-critical** (cold start is acceptable).
+- **Horizontal scaling:** For multiple instances, use a **distributed cache** (e.g. Redis). Config placeholder: `meiken.cache.type = "redis"` and `meiken.cache.redis` (commented in `application.conf`). Redis implementation is optional/future.
+- **Cache-Control headers:**  
+  - `/health`: `no-cache`  
+  - `/metrics`: `no-store`  
+  - `/api/v1/*`: `public, max-age=300` (5 minutes)
+
+### Parallel processing
+
+- **Alpha endpoint:** Fetches target and benchmark in parallel via `coroutineScope` + `async`; metrics: `parallel_fetch_duration_seconds`, `parallel_operations_total`.
+- **Connection pool:** 50 connections per route, keep-alive 60 s (see Resilience section).
+
+### Resource requirements
+
+- **Typical:** 256Mi memory, 100m CPU (requests); limits 512Mi / 500m for bursts.
+- **Docker:** `JAVA_OPTS=-Xmx512m -Xms256m -XX:+UseG1GC -XX:MaxGCPauseMillis=200` (see Dockerfile).
+
+## Scaling
+
+### Horizontal scaling
+
+- **Stateless design:** No local session state; only the symbol analytics cache is in-memory (per instance). **Session affinity is not required**; any instance can serve any request.
+- **Cache:** Per-instance Caffeine cache; cache is **non-critical** (cold cache only affects latency, not correctness). For shared cache across instances, add Redis (see Performance / Caching strategy).
+- **Kubernetes:** Deploy with the manifests in `k8s/` (Deployment, Service, HPA, ConfigMap). Readiness and liveness use `/health`. HPA targets CPU 70% and memory 80% (min 2, max 10 replicas).
+- **Load testing:** Use k6: `k6 run load-test/script.js`. Script runs baseline (10 VU), stress (100 VU), and spike (500 VU). Success criteria: p95 &lt; 500 ms, error rate &lt; 1%.
+
+### Kubernetes deployment
+
+```bash
+# Build image
+docker build -t meiken:latest .
+
+# Apply manifests (create secret for ALPHA_VANTAGE_API_KEY if needed)
+kubectl apply -f k8s/ConfigMap.yaml
+kubectl create secret generic meiken-secrets --from-literal=alpha-vantage-api-key=YOUR_KEY  # optional
+kubectl apply -f k8s/Deployment.yaml
+kubectl apply -f k8s/Service.yaml
+kubectl apply -f k8s/HorizontalPodAutoscaler.yaml
+```
+
+### Load testing (k6)
+
+```bash
+# Install k6: https://k6.io/docs/getting-started/installation/
+k6 run load-test/script.js
+
+# Custom base URL
+BASE_URL=http://your-host:8080 k6 run load-test/script.js
+```
+
+### Monitoring dashboard
+
+- **Grafana:** Example panels and Prometheus config in `grafana/` (`dashboard.json`, `prometheus.yml`). Panels: request rate, latency (p50/p95/p99), error rate, circuit breaker state, cache hit rate, parallel fetch duration.
+
 ## Tests
 
 ```bash
@@ -334,6 +398,9 @@ scrape_configs:
 | `retry_attempts_total` | Counter | outcome | Retry attempts by outcome |
 | `request_timeout_total` | Counter | — | Request timeouts |
 | `graceful_shutdown_duration_seconds` | Timer | — | Graceful shutdown wait duration |
+| `parallel_fetch_duration_seconds` | Timer | — | Duration of parallel symbol fetches (e.g. alpha) |
+| `parallel_operations_total` | Counter | — | Number of parallel operations |
+| `response_size_bytes` | DistributionSummary | endpoint | Response body size in bytes |
 
 ### Example Grafana / PromQL queries
 
@@ -368,8 +435,9 @@ scrape_configs:
 - **Kotlin** 1.8, **Ktor** 2.3, **Gradle** (Kotlin DSL)
 - **kotlinx-datetime**, **kotlinx-serialization**, **kotlinx-coroutines**
 - **Ktor Client** (CIO) for Alpha Vantage (connection pool, timeouts)
+- **Ktor Compression** for gzip/deflate response compression
 - **Resilience4j** for circuit breaker, retry, and resilience metrics
-- **Caffeine** for caching (when using real API)
+- **Caffeine** for in-memory caching (single instance); Redis optional for horizontal scaling
 - **Micrometer** + **Prometheus** for metrics
 - **Logback** + **logstash-logback-encoder** for JSON logging
 - **JUnit 5** for tests

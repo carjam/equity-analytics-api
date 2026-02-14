@@ -7,6 +7,7 @@ import com.meiken.data.MarketDataService
 import com.meiken.model.Alpha
 import com.meiken.model.AlphaMetadata
 import com.meiken.model.DailyReturn
+import com.meiken.observability.Metrics
 import com.meiken.util.validateDateRange
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -34,6 +35,7 @@ class AlphaServiceImpl(
     ): Alpha = coroutineScope {
         validateDateRange(fromDate, toDate, maxDays)
 
+        val startNanos = System.nanoTime()
         val targetAnalyticsDeferred = async {
             analyticsCache.getOrCompute(target, fromDate, toDate, marketDataService)
         }
@@ -43,6 +45,9 @@ class AlphaServiceImpl(
 
         val targetAnalytics = targetAnalyticsDeferred.await()
         val benchmarkAnalytics = benchmarkAnalyticsDeferred.await()
+        val parallelDurationSeconds = (System.nanoTime() - startNanos) / 1e9
+        Metrics.recordParallelFetchDuration(parallelDurationSeconds)
+        Metrics.recordParallelOperationsTotal(2)
 
         val (alignedTarget, alignedBenchmark) = alignReturnsByDate(
             targetAnalytics.dailyReturns,

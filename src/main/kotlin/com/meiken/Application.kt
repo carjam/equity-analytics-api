@@ -21,6 +21,7 @@ import com.meiken.security.SecurityConfig
 import com.meiken.security.TlsConfig
 import com.meiken.security.createSecurityHeadersPlugin
 import com.meiken.security.installRateLimiting
+import com.meiken.config.PerformanceConfig
 import com.meiken.config.ResilienceConfig
 import com.meiken.resilience.CircuitBreakerConfig
 import com.meiken.resilience.RetryConfig
@@ -39,6 +40,9 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.plugins.callloging.CallLogging
+import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.deflate
+import io.ktor.server.plugins.compression.gzip
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.HttpHeaders
 import io.ktor.server.plugins.cors.routing.CORS
@@ -156,6 +160,14 @@ fun Application.module() {
             ignoreUnknownKeys = true
             encodeDefaults = true
         })
+    }
+
+    val performanceConfig = PerformanceConfig.from(environment.config)
+    if (performanceConfig.compression.enabled) {
+        install(Compression) {
+            gzip { priority = 1.0 }
+            deflate { priority = 0.9 }
+        }
     }
 
     installStatusPages()

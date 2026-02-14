@@ -34,14 +34,28 @@ data class SymbolAnalytics(
 )
 
 /**
- * Cache service for [SymbolAnalytics]. Thread-safe and safe for heavy concurrent use:
+ * Abstraction for caching [SymbolAnalytics]. Implementations: in-memory (Caffeine) or Redis (for horizontal scaling).
+ */
+interface SymbolAnalyticsCache {
+    suspend fun getOrCompute(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        marketDataService: MarketDataService
+    ): SymbolAnalytics
+    fun getEstimatedSize(): Long
+    fun getHitRate(): Double
+}
+
+/**
+ * In-memory cache service for [SymbolAnalytics] (Caffeine). Thread-safe and safe for heavy concurrent use:
  * - Cache hits are lock-free (Caffeine is thread-safe); different keys are served in parallel.
  * - Cache misses are coalesced per key: only one coroutine computes per key; others await that result (no thundering herd).
  * Ensures at most one API call and one computation per symbol/date-range; subsequent requests for the same key
  * are served from cache or from the in-flight computation. Cache key: "${symbol}:${fromDate}:${toDate}".
  * TTL 1 hour, max 1000 entries. Logs cache hits vs misses.
  */
-class SymbolAnalyticsCacheService {
+class SymbolAnalyticsCacheService : SymbolAnalyticsCache {
 
     private val log = LoggerFactory.getLogger(SymbolAnalyticsCacheService::class.java)
 
@@ -67,7 +81,7 @@ class SymbolAnalyticsCacheService {
      *   from [inProgress]; on failure, completes exceptionally so all waiters get the same error.
      * All calculations use close-of-day prices. Caller should validate date range before invoking.
      */
-    suspend fun getOrCompute(
+    override suspend fun getOrCompute(
         symbol: String,
         fromDate: LocalDate,
         toDate: LocalDate,
@@ -123,10 +137,10 @@ class SymbolAnalyticsCacheService {
     }
 
     /** Current number of entries in the cache (approximate). */
-    fun getEstimatedSize(): Long = cache.estimatedSize()
+    override fun getEstimatedSize(): Long = cache.estimatedSize()
 
     /** Hit rate (0.0–1.0) from hits and misses since startup. */
-    fun getHitRate(): Double {
+    override fun getHitRate(): Double {
         val h = hitsCount.get()
         val m = missesCount.get()
         val total = h + m
