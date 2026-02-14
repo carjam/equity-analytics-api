@@ -19,3 +19,8 @@ class BadRequestException(message: String) : RuntimeException(message)
  * Thrown when an external service (e.g. Alpha Vantage) fails or returns an error.
  */
 class ExternalServiceException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+/**
+ * Thrown when market data retrieval fails (network, rate limit, parse error, etc.).
+ */
+class DataRetrievalException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

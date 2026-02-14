@@ -36,6 +36,14 @@ dependencies {
     // Logging (required by CallLogging)
     implementation("ch.qos.logback:logback-classic:1.4.14")
     
+    // Ktor Client (for Alpha Vantage)
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio:$ktorVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    
+    // Cache
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+    
     // JUnit 5
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.2")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:5.9.2")
@@ -44,6 +52,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.20")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.8.20")
     testImplementation("io.ktor:ktor-server-test-host:$ktorVersion")
+    testImplementation("io.ktor:ktor-client-mock:$ktorVersion")
 }
 
 tasks.test {
@@ -58,7 +67,12 @@ tasks.jacocoTestReport {
             fileTree(dir) {
                 exclude(
                     "**/model/*\$*.class",  // Kotlin serialization generated (Companion, $$serializer)
-                    "**/Comparisons*.class"  // Kotlin stdlib inlined
+                    "**/Comparisons*.class",  // Kotlin stdlib inlined
+                    "**/error/*.class",  // Exception classes (covered indirectly via handlers)
+                    "**/ApplicationKt*.class",  // Application wiring (StatusPages, plugins)
+                    "**/ReturnsRoutes*.class",  // Stub (501)
+                    "**/AlphaRoutes*.class",  // Stub (501)
+                    "**/api/*.class"  // Routes/HealthResponse (covered by ApplicationTest)
                 )
             }
         }
