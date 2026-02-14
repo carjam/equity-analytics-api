@@ -24,3 +24,13 @@ class ExternalServiceException(message: String, cause: Throwable? = null) : Runt
  * Thrown when market data retrieval fails (network, rate limit, parse error, etc.).
  */
 class DataRetrievalException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+/**
+ * Thrown when API key is missing or invalid (401 Unauthorized).
+ */
+class UnauthorizedException(message: String = "Missing or invalid API key") : RuntimeException(message)
+
+/**
+ * Thrown when rate limit is exceeded (429 Too Many Requests).
+ */
+class RateLimitExceededException(message: String = "Rate limit exceeded", val retryAfterSeconds: Int? = null) : RuntimeException(message)

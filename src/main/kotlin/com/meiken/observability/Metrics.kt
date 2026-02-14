@@ -120,5 +120,29 @@ object Metrics {
         }
     }
 
+    // --- API key auth: api_key_usage_total (key_id, endpoint), api_key_authentication_failures_total ---
+
+    fun recordApiKeyUsage(keyId: String, endpoint: String) {
+        registry?.let { r ->
+            Counter.builder("api_key_usage_total")
+                .description("Total API key usage by key and endpoint")
+                .tag("app", "meiken")
+                .tag("key_id", keyId)
+                .tag("endpoint", endpoint)
+                .register(r)
+                .increment()
+        }
+    }
+
+    fun recordApiKeyAuthFailure() {
+        registry?.let { r ->
+            Counter.builder("api_key_authentication_failures_total")
+                .description("Total API key authentication failures")
+                .tag("app", "meiken")
+                .register(r)
+                .increment()
+        }
+    }
+
     fun getRegistry(): MeterRegistry? = registry
 }

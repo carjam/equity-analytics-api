@@ -11,7 +11,14 @@ import com.meiken.error.ErrorDetail
 import com.meiken.error.ErrorResponse
 import com.meiken.error.ExternalServiceException
 import com.meiken.error.InvalidDateRangeException
+import com.meiken.error.RateLimitExceededException
 import com.meiken.error.SymbolNotFoundException
+import com.meiken.error.UnauthorizedException
+import com.meiken.security.ApiKeyManager
+import com.meiken.security.SecurityConfig
+import com.meiken.security.TlsConfig
+import com.meiken.security.createSecurityHeadersPlugin
+import com.meiken.security.installRateLimiting
 import com.meiken.observability.Metrics
 import com.meiken.observability.ObservabilityPlugin
 import com.meiken.service.AlphaServiceImpl
@@ -26,6 +33,7 @@ import io.ktor.server.application.install
 import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpHeaders
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
@@ -76,6 +84,19 @@ fun Application.installStatusPages() {
                 ErrorResponse(ErrorDetail("EXTERNAL_SERVICE_ERROR", cause.message ?: "External service error. Please try again later."))
             )
         }
+        exception<UnauthorizedException> { call, cause ->
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                ErrorResponse(ErrorDetail("UNAUTHORIZED", cause.message ?: "Missing or invalid API key."))
+            )
+        }
+        exception<RateLimitExceededException> { call, cause ->
+            cause.retryAfterSeconds?.let { call.response.headers.append(HttpHeaders.RetryAfter, it.toString()) }
+            call.respond(
+                HttpStatusCode.TooManyRequests,
+                ErrorResponse(ErrorDetail("RATE_LIMIT_EXCEEDED", cause.message ?: "Rate limit exceeded. Retry later."))
+            )
+        }
         exception<Throwable> { call, cause ->
             call.respond(
                 HttpStatusCode.InternalServerError,
@@ -109,9 +130,30 @@ fun Application.module() {
         registry = prometheusRegistry
     }
     install(ObservabilityPlugin)
-    install(CORS) {
-        anyHost()
+
+    val securityConfig = SecurityConfig.from(environment.config)
+    val tlsConfig = TlsConfig.from(environment.config)
+    if (!tlsConfig.isConfigured) {
+        LoggerFactory.getLogger("com.meiken.Application")
+            .warn("SSL/TLS not configured (no KEY_STORE_PATH); running in HTTP-only development mode. For production, use a reverse proxy for HTTPS.")
     }
+    install(createSecurityHeadersPlugin(addHsts = securityConfig.requireHttps))
+    installRateLimiting(
+        anonymousPerMinute = securityConfig.rateLimitAnonymousPerMinute,
+        authenticatedPerMinute = securityConfig.rateLimitAuthenticatedPerMinute
+    )
+    install(CORS) {
+        if (securityConfig.allowedOrigins.isNotEmpty()) {
+            securityConfig.allowedOrigins.forEach { allowHost(it) }
+        } else {
+            anyHost()
+        }
+        allowMethod(io.ktor.http.HttpMethod.Get)
+        allowHeader("X-API-Key")
+        allowHeader("X-Correlation-ID")
+    }
+
+    val apiKeyManager = ApiKeyManager(securityConfig.validApiKeys)
 
     val environmentName = environment.config.propertyOrNull("meiken.environment")?.getString() ?: "development"
     val marketDataService = createMarketDataService(environmentName)
@@ -119,7 +161,16 @@ fun Application.module() {
     val returnsService = ReturnsServiceImpl(analyticsCache, marketDataService)
     val alphaService = AlphaServiceImpl(analyticsCache, marketDataService)
     val analyticsService = AnalyticsServiceImpl(analyticsCache, marketDataService)
-    configureRouting(returnsService, alphaService, analyticsService, prometheusRegistry, marketDataService, analyticsCache)
+    configureRouting(
+        returnsService = returnsService,
+        alphaService = alphaService,
+        analyticsService = analyticsService,
+        prometheusRegistry = prometheusRegistry,
+        marketDataService = marketDataService,
+        analyticsCache = analyticsCache,
+        apiKeysEnabled = securityConfig.apiKeysEnabled,
+        apiKeyManager = apiKeyManager
+    )
 }
 
 /**

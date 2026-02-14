@@ -150,6 +150,79 @@ Example:
 {"error":{"code":"INVALID_DATE_RANGE","message":"Date range cannot exceed 365 days (requested 400 days)","details":null}}
 ```
 
+- **401** – Unauthorized (missing or invalid API key when API keys are enabled)
+- **429** – Too Many Requests (rate limit exceeded; check `Retry-After` header)
+
+## Security
+
+Security is **configurable**: disabled by default for development, enabled for production via config or environment variables.
+
+### API key authentication
+
+When enabled, **all `/api/v1/**` endpoints** require a valid API key. `/health` and `/metrics` remain open.
+
+- **Enable:** Set `API_KEYS_ENABLED=true` (or `meiken.security.apiKeysEnabled = true` in config).
+- **Valid keys:** Set `VALID_API_KEYS` to a comma-separated list of keys (e.g. `VALID_API_KEYS=key1,key2`). Keys are plain text; for production consider hashing and a database (extensible later).
+
+**How to pass the API key:**
+
+- **Header (recommended):** `X-API-Key: your_key_here`
+- **Query parameter:** `?api_key=your_key_here` (use only when header is not possible; query params may be logged)
+
+Example:
+
+```bash
+curl -H "X-API-Key: your_key" "http://localhost:8080/api/v1/tickers/AAPL/returns"
+```
+
+Invalid or missing key returns **401** with JSON `{"error":{"code":"UNAUTHORIZED","message":"Missing or invalid API key. Use X-API-Key header or api_key query parameter."}}`.
+
+### Rate limiting
+
+- **/health** and **/metrics:** No rate limit (for health checks and Prometheus scraping).
+- **/api/v1/**: Limited per client (per IP). Default: **100 requests per minute** (configurable via `meiken.rateLimit.requestsPerMinute` or env).
+
+When the limit is exceeded, the server returns **429 Too Many Requests** with a `Retry-After` header (seconds until the bucket refills). Response headers:
+
+- `X-RateLimit-Limit` – max requests per window  
+- `X-RateLimit-Remaining` – remaining requests  
+- `X-RateLimit-Reset` – timestamp when the limit resets  
+
+### CORS
+
+- **Development:** When `ALLOWED_ORIGINS` is not set, all origins are allowed (`anyHost()`).
+- **Production:** Set `ALLOWED_ORIGINS` to a comma-separated list of allowed origins (e.g. `https://app.example.com,https://admin.example.com`).
+- **Methods:** Only **GET** is allowed (read-only API).
+- **Headers:** `X-API-Key` and `X-Correlation-ID` are allowed.
+
+### TLS / HTTPS
+
+- **Production:** Prefer terminating TLS at a **reverse proxy** (nginx, AWS ALB, etc.). The app runs over HTTP behind the proxy; the proxy handles HTTPS, certificates, and HSTS.
+- **Optional in-app TLS:** You can configure SSL in `application.conf` under `ktor.security.ssl` (keyStore, keyStorePassword, keyAlias) and set `SSL_PORT` (default 8443). Use env vars `KEY_STORE_PATH`, `KEY_STORE_PASSWORD`, `KEY_ALIAS` for secrets.
+- When `REQUIRE_HTTPS=true` (or `meiken.security.requireHttps = true`), the app adds **Strict-Transport-Security** (HSTS) to responses.
+
+### Security headers
+
+Every response includes:
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Content-Security-Policy: default-src 'none'`
+
+### Input validation
+
+- **Ticker symbols:** 1–5 uppercase alphanumeric characters only.
+- **Dates:** ISO-8601 (YYYY-MM-DD), not in the future; optional params validated when present.
+- **Strings:** Control characters are stripped; max length enforced to reduce injection risk.
+
+### Best practices
+
+- Use **header** `X-API-Key` instead of query param when possible (avoids key in logs).
+- Rotate API keys periodically; support multiple valid keys during rotation (config supports comma-separated list).
+- In production, set `ALLOWED_ORIGINS`, enable API keys, and use HTTPS (reverse proxy or in-app TLS).
+- Monitor `api_key_usage_total` and `api_key_authentication_failures_total` (Prometheus) for auditing.
+
 ## Tests
 
 ```bash
@@ -210,6 +283,8 @@ scrape_configs:
 | `cache_hit_rate` | Gauge | — | Hit rate (0.0–1.0) |
 | `alpha_vantage_calls_total` | Counter | symbol, status | Alpha Vantage API calls (status: success, error, rate_limit, symbol_not_found, no_data, insufficient_data) |
 | `alpha_vantage_request_duration_seconds` | Timer | — | Alpha Vantage request duration |
+| `api_key_usage_total` | Counter | key_id, endpoint | API key usage (when API key auth is enabled) |
+| `api_key_authentication_failures_total` | Counter | — | Failed API key authentication attempts |
 
 ### Example Grafana / PromQL queries
 

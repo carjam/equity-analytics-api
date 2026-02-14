@@ -2,6 +2,9 @@ package com.meiken.api
 
 import com.meiken.cache.SymbolAnalyticsCacheService
 import com.meiken.data.MarketDataService
+import com.meiken.security.ApiKeyManager
+import com.meiken.security.apiKeyPrincipal
+import com.meiken.security.validateApiKey
 import com.meiken.service.AlphaService
 import com.meiken.service.AnalyticsService
 import com.meiken.service.ReturnsService
@@ -10,10 +13,14 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
+import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.request.path
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Instant
@@ -30,7 +37,9 @@ fun Application.configureRouting(
     analyticsService: AnalyticsService,
     prometheusRegistry: PrometheusMeterRegistry?,
     marketDataService: MarketDataService? = null,
-    analyticsCache: SymbolAnalyticsCacheService? = null
+    analyticsCache: SymbolAnalyticsCacheService? = null,
+    apiKeysEnabled: Boolean = false,
+    apiKeyManager: ApiKeyManager? = null
 ) {
     routing {
         get("/health") {
@@ -50,9 +59,20 @@ fun Application.configureRouting(
             call.respondText(body, ContentType.Text.Plain, HttpStatusCode.OK)
         }
         route("api/v1") {
-            returnsRoutes(returnsService)
-            alphaRoutes(alphaService)
-            analyticsRoutes(analyticsService)
+            if (apiKeysEnabled && apiKeyManager != null) {
+                intercept(ApplicationCallPipeline.Call) {
+                    if (!call.validateApiKey(apiKeyManager)) return@intercept
+                    call.apiKeyPrincipal()?.let { principal ->
+                        apiKeyManager.recordUsage(principal.keyId, call.request.path())
+                    }
+                    proceed()
+                }
+            }
+            rateLimit(RateLimitName("api")) {
+                returnsRoutes(returnsService)
+                alphaRoutes(alphaService)
+                analyticsRoutes(analyticsService)
+            }
         }
     }
 }

@@ -1,18 +1,16 @@
 package com.meiken.api
 
 import com.meiken.error.BadRequestException
+import com.meiken.security.InputValidator
 import com.meiken.service.AnalyticsService
 import com.meiken.util.getCurrentYearStart
 import com.meiken.util.getToday
-import com.meiken.util.parseDate
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
-
-private val SYMBOL_REGEX = Regex("^[A-Z0-9]{1,5}$")
 private const val DEFAULT_RISK_FREE_RATE = 0.04
 private const val DEFAULT_CORRELATION_WINDOW = 30
 
@@ -29,13 +27,10 @@ fun Route.analyticsRoutes(analyticsService: AnalyticsService) {
         route("{symbol}") {
             route("volatility") {
                 get {
-                    val symbol = call.parameters["symbol"]?.uppercase() ?: ""
-                    if (!symbol.matches(SYMBOL_REGEX)) {
-                        throw BadRequestException("Invalid symbol: must be 1-5 alphanumeric characters")
-                    }
-                    val fromDate = call.request.queryParameters["from_date"]?.let { parseDate(it) }
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"])
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date") }
                         ?: getCurrentYearStart()
-                    val toDate = call.request.queryParameters["to_date"]?.let { parseDate(it) }
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date") }
                         ?: getToday()
                     val response = analyticsService.calculateVolatility(symbol, fromDate, toDate)
                     call.respond(HttpStatusCode.OK, response)
@@ -43,15 +38,12 @@ fun Route.analyticsRoutes(analyticsService: AnalyticsService) {
             }
             route("sharpe") {
                 get {
-                    val symbol = call.parameters["symbol"]?.uppercase() ?: ""
-                    if (!symbol.matches(SYMBOL_REGEX)) {
-                        throw BadRequestException("Invalid symbol: must be 1-5 alphanumeric characters")
-                    }
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"])
                     val riskFreeRate = call.request.queryParameters["risk_free_rate"]?.toDoubleOrNull()
                         ?: DEFAULT_RISK_FREE_RATE
-                    val fromDate = call.request.queryParameters["from_date"]?.let { parseDate(it) }
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date") }
                         ?: getCurrentYearStart()
-                    val toDate = call.request.queryParameters["to_date"]?.let { parseDate(it) }
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date") }
                         ?: getToday()
                     val response = analyticsService.calculateSharpe(symbol, fromDate, toDate, riskFreeRate)
                     call.respond(HttpStatusCode.OK, response)
@@ -61,17 +53,11 @@ fun Route.analyticsRoutes(analyticsService: AnalyticsService) {
     }
     route("beta") {
         get {
-            val target = call.request.queryParameters["target"]?.uppercase()
-            val benchmark = call.request.queryParameters["benchmark"]?.uppercase()
-            if (target.isNullOrBlank() || !target.matches(SYMBOL_REGEX)) {
-                throw BadRequestException("target is required and must be 1-5 alphanumeric characters")
-            }
-            if (benchmark.isNullOrBlank() || !benchmark.matches(SYMBOL_REGEX)) {
-                throw BadRequestException("benchmark is required and must be 1-5 alphanumeric characters")
-            }
-            val fromDate = call.request.queryParameters["from_date"]?.let { parseDate(it) }
+            val target = InputValidator.validateSymbol(call.request.queryParameters["target"], "target")
+            val benchmark = InputValidator.validateSymbol(call.request.queryParameters["benchmark"], "benchmark")
+            val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date") }
                 ?: getCurrentYearStart()
-            val toDate = call.request.queryParameters["to_date"]?.let { parseDate(it) }
+            val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date") }
                 ?: getToday()
             val response = analyticsService.calculateBeta(target, benchmark, fromDate, toDate)
             call.respond(HttpStatusCode.OK, response)
@@ -79,17 +65,11 @@ fun Route.analyticsRoutes(analyticsService: AnalyticsService) {
     }
     route("correlation") {
         get {
-            val ticker1 = call.request.queryParameters["ticker1"]?.uppercase()
-            val ticker2 = call.request.queryParameters["ticker2"]?.uppercase()
-            if (ticker1.isNullOrBlank() || !ticker1.matches(SYMBOL_REGEX)) {
-                throw BadRequestException("ticker1 is required and must be 1-5 alphanumeric characters")
-            }
-            if (ticker2.isNullOrBlank() || !ticker2.matches(SYMBOL_REGEX)) {
-                throw BadRequestException("ticker2 is required and must be 1-5 alphanumeric characters")
-            }
-            val fromDate = call.request.queryParameters["from_date"]?.let { parseDate(it) }
+            val ticker1 = InputValidator.validateSymbol(call.request.queryParameters["ticker1"], "ticker1")
+            val ticker2 = InputValidator.validateSymbol(call.request.queryParameters["ticker2"], "ticker2")
+            val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date") }
                 ?: getCurrentYearStart()
-            val toDate = call.request.queryParameters["to_date"]?.let { parseDate(it) }
+            val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date") }
                 ?: getToday()
             val window = call.request.queryParameters["window"]?.toIntOrNull() ?: DEFAULT_CORRELATION_WINDOW
             if (window < 2) {
