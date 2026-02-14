@@ -1,5 +1,6 @@
 package com.meiken.util
 
+import com.meiken.error.BadRequestException
 import com.meiken.error.InvalidDateRangeException
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -33,4 +34,19 @@ fun validateDateRange(from: LocalDate, to: LocalDate, maxDays: Int = 365) {
 fun getCurrentYearStart(): LocalDate {
     val today = Clock.System.todayIn(TimeZone.UTC)
     return LocalDate(today.year, 1, 1)
+}
+
+/**
+ * Returns today's date (UTC).
+ */
+fun getToday(): LocalDate = Clock.System.todayIn(TimeZone.UTC)
+
+/**
+ * Parses a date string in YYYY-MM-DD format.
+ * @throws BadRequestException if the format is invalid
+ */
+fun parseDate(s: String): LocalDate = try {
+    LocalDate.parse(s)
+} catch (e: Exception) {
+    throw BadRequestException("Invalid date format: expected YYYY-MM-DD, got: $s")
 }

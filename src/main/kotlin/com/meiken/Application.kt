@@ -1,12 +1,16 @@
 package com.meiken
 
 import com.meiken.api.configureRouting
+import com.meiken.data.MockMarketDataService
 import com.meiken.error.BadRequestException
+import com.meiken.error.DataRetrievalException
 import com.meiken.error.ErrorDetail
 import com.meiken.error.ErrorResponse
 import com.meiken.error.ExternalServiceException
 import com.meiken.error.InvalidDateRangeException
 import com.meiken.error.SymbolNotFoundException
+import com.meiken.service.AlphaServiceImpl
+import com.meiken.service.ReturnsServiceImpl
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -20,14 +24,7 @@ import kotlinx.serialization.json.Json
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
-fun Application.module() {
-    install(ContentNegotiation) {
-        json(Json {
-            ignoreUnknownKeys = true
-            encodeDefaults = true
-        })
-    }
-
+fun Application.installStatusPages() {
     install(StatusPages) {
         exception<InvalidDateRangeException> { call, cause ->
             call.respond(
@@ -47,6 +44,12 @@ fun Application.module() {
                 ErrorResponse(ErrorDetail("BAD_REQUEST", cause.message ?: "Bad request"))
             )
         }
+        exception<DataRetrievalException> { call, cause ->
+            call.respond(
+                HttpStatusCode.InternalServerError,
+                ErrorResponse(ErrorDetail("DATA_RETRIEVAL_ERROR", cause.message ?: "Data retrieval failed"))
+            )
+        }
         exception<ExternalServiceException> { call, cause ->
             call.respond(
                 HttpStatusCode.BadGateway,
@@ -60,12 +63,24 @@ fun Application.module() {
             )
         }
     }
+}
 
+fun Application.module() {
+    install(ContentNegotiation) {
+        json(Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        })
+    }
+
+    installStatusPages()
     install(CallLogging)
-
     install(CORS) {
         anyHost()
     }
 
-    configureRouting()
+    val marketDataService = MockMarketDataService()
+    val returnsService = ReturnsServiceImpl(marketDataService)
+    val alphaService = AlphaServiceImpl(marketDataService)
+    configureRouting(returnsService, alphaService)
 }

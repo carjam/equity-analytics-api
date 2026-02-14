@@ -23,20 +23,21 @@ class ApplicationTest {
     }
 
     @Test
-    fun `returns stub returns 501`() = testApplication {
+    fun `returns endpoint returns 200 with JSON`() = testApplication {
         environment { config = MapApplicationConfig() }
         application { module() }
         val response = client.get("/api/v1/tickers/AAPL/returns")
-        assertEquals(HttpStatusCode.NotImplemented, response.status)
-        assertEquals("Not implemented yet", response.bodyAsText())
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        kotlin.test.assertTrue(body.contains("AAPL"), "Expected body to contain symbol, got: $body")
+        kotlin.test.assertTrue(body.contains("dailyReturns"), "Expected body to contain dailyReturns, got: $body")
     }
 
     @Test
-    fun `alpha stub returns 501`() = testApplication {
+    fun `alpha endpoint without params returns 400`() = testApplication {
         environment { config = MapApplicationConfig() }
         application { module() }
         val response = client.get("/api/v1/alpha")
-        assertEquals(HttpStatusCode.NotImplemented, response.status)
-        assertEquals("Not implemented yet", response.bodyAsText())
+        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 }
