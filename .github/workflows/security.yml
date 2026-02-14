@@ -1,0 +1,37 @@
+name: Security Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run dependency check
+      run: ./gradlew dependencyCheckAnalyze
+    
+  container-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build image
+      run: docker build -t meiken:scan .
+    
+    - name: Run Trivy scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: meiken:scan
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
