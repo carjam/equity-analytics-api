@@ -32,9 +32,14 @@ dependencies {
     implementation("io.ktor:ktor-server-status-pages:$ktorVersion")
     implementation("io.ktor:ktor-server-cors:$ktorVersion")
     implementation("io.ktor:ktor-server-call-logging:$ktorVersion")
+    implementation("io.ktor:ktor-server-metrics-micrometer:$ktorVersion")
+    
+    // Micrometer Prometheus
+    implementation("io.micrometer:micrometer-registry-prometheus:1.12.0")
     
     // Logging (required by CallLogging)
     implementation("ch.qos.logback:logback-classic:1.4.14")
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     
     // Ktor Client (for Alpha Vantage)
     implementation("io.ktor:ktor-client-core:$ktorVersion")

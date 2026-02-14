@@ -12,13 +12,18 @@ import com.meiken.error.ErrorResponse
 import com.meiken.error.ExternalServiceException
 import com.meiken.error.InvalidDateRangeException
 import com.meiken.error.SymbolNotFoundException
+import com.meiken.observability.Metrics
+import com.meiken.observability.ObservabilityPlugin
 import com.meiken.service.AlphaServiceImpl
 import com.meiken.service.AnalyticsServiceImpl
 import com.meiken.service.ReturnsServiceImpl
+import io.micrometer.prometheus.PrometheusConfig
+import io.micrometer.prometheus.PrometheusMeterRegistry
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
+import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
@@ -97,6 +102,13 @@ fun Application.module() {
 
     installStatusPages()
     install(CallLogging)
+
+    val prometheusRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
+    Metrics.init(prometheusRegistry)
+    install(MicrometerMetrics) {
+        registry = prometheusRegistry
+    }
+    install(ObservabilityPlugin)
     install(CORS) {
         anyHost()
     }
@@ -107,7 +119,7 @@ fun Application.module() {
     val returnsService = ReturnsServiceImpl(analyticsCache, marketDataService)
     val alphaService = AlphaServiceImpl(analyticsCache, marketDataService)
     val analyticsService = AnalyticsServiceImpl(analyticsCache, marketDataService)
-    configureRouting(returnsService, alphaService, analyticsService)
+    configureRouting(returnsService, alphaService, analyticsService, prometheusRegistry, marketDataService, analyticsCache)
 }
 
 /**

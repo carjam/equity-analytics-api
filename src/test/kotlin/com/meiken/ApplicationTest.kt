@@ -17,9 +17,12 @@ class ApplicationTest {
         val response = client.get("/health")
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
-        kotlin.test.assertTrue(body.contains("ok"), "Expected health body to contain 'ok', got: $body")
-        kotlin.test.assertTrue(body.contains("Service is operational"), "Expected health body to contain message, got: $body")
+        kotlin.test.assertTrue(
+            body.contains("healthy") || body.contains("degraded") || body.contains("unhealthy"),
+            "Expected health body to contain status (healthy/degraded/unhealthy), got: $body"
+        )
         kotlin.test.assertTrue(body.contains("dependencies"), "Expected health body to include dependencies, got: $body")
+        kotlin.test.assertTrue(body.contains("system"), "Expected health body to include system, got: $body")
     }
 
     @Test

@@ -25,3 +25,32 @@ data class DependencyStatus(
     val message: String? = null,
     val details: Map<String, String>? = null
 )
+
+/**
+ * Enhanced health response for production: status, dependencies with latency/size/hit_rate, system metrics.
+ */
+@Serializable
+data class EnhancedHealthResponse(
+    val status: String,
+    val timestamp: String,
+    val version: String,
+    val dependencies: List<EnhancedDependencyStatus>,
+    val system: SystemStatus
+)
+
+@Serializable
+data class EnhancedDependencyStatus(
+    val name: String,
+    val status: String,
+    val latency_ms: Long? = null,
+    val message: String? = null,
+    val size: Long? = null,
+    val hit_rate: Double? = null
+)
+
+@Serializable
+data class SystemStatus(
+    val memory_used_mb: Long,
+    val memory_max_mb: Long,
+    val uptime_seconds: Long
+)

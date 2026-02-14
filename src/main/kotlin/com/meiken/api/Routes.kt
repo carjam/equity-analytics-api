@@ -1,8 +1,11 @@
 package com.meiken.api
 
+import com.meiken.cache.SymbolAnalyticsCacheService
+import com.meiken.data.MarketDataService
 import com.meiken.service.AlphaService
 import com.meiken.service.AnalyticsService
 import com.meiken.service.ReturnsService
+import io.micrometer.prometheus.PrometheusMeterRegistry
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -18,25 +21,33 @@ import java.time.Instant
 private val healthJson = Json { encodeDefaults = true }
 
 /**
- * Registers all HTTP routes: GET /health (JSON health check) and under api/v1 the returns,
- * alpha, and analytics route trees. Services are injected so routes can call business logic.
+ * Registers all HTTP routes: GET /health (enhanced JSON health), GET /metrics (Prometheus),
+ * and under api/v1 the returns, alpha, and analytics route trees.
  */
-fun Application.configureRouting(returnsService: ReturnsService, alphaService: AlphaService, analyticsService: AnalyticsService) {
+fun Application.configureRouting(
+    returnsService: ReturnsService,
+    alphaService: AlphaService,
+    analyticsService: AnalyticsService,
+    prometheusRegistry: PrometheusMeterRegistry?,
+    marketDataService: MarketDataService? = null,
+    analyticsCache: SymbolAnalyticsCacheService? = null
+) {
     routing {
         get("/health") {
-            // Health check: status, message, timestamp, and dependency list (extensible).
-            val dependencies = listOf(
-                DependencyStatus(name = "app", status = "up", message = "Application is running")
-                // Add more as you wire them: DB, Alpha Vantage API, cache, etc.
-            )
-            val response = HealthResponse(
-                status = "ok",
-                message = "Service is operational",
+            val (status, dependencies, system) = buildHealthDetails(marketDataService, analyticsCache)
+            val response = EnhancedHealthResponse(
+                status = status,
                 timestamp = Instant.now().toString(),
-                dependencies = dependencies
+                version = "0.1.0",
+                dependencies = dependencies,
+                system = system
             )
             val body = healthJson.encodeToString(response)
             call.respondText(body, ContentType.Application.Json, HttpStatusCode.OK)
+        }
+        get("/metrics") {
+            val body = prometheusRegistry?.scrape() ?: ""
+            call.respondText(body, ContentType.Text.Plain, HttpStatusCode.OK)
         }
         route("api/v1") {
             returnsRoutes(returnsService)

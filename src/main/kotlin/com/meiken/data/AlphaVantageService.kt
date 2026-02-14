@@ -3,6 +3,7 @@ package com.meiken.data
 import com.meiken.error.DataRetrievalException
 import com.meiken.error.SymbolNotFoundException
 import com.meiken.model.DailyPrice
+import com.meiken.observability.Metrics
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -46,36 +47,48 @@ class AlphaVantageService(
 
     /** Fetches close-of-day prices only: one bar per calendar day from TIME_SERIES_DAILY; uses "4. close". outputSize (compact/full) and limiter messages are config-driven. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
-        val response = try {
-            client.get(BASE_URL) {
-                parameter("function", "TIME_SERIES_DAILY")
-                parameter("symbol", symbol)
-                parameter("apikey", apiKey)
-                parameter("outputsize", outputSize)
-            }.body<String>()
-        } catch (e: Exception) {
-            throw DataRetrievalException("Failed to fetch data for $symbol: ${e.message}", e)
-        }
+        val startNanos = System.nanoTime()
+        return try {
+            val response = try {
+                client.get(BASE_URL) {
+                    parameter("function", "TIME_SERIES_DAILY")
+                    parameter("symbol", symbol)
+                    parameter("apikey", apiKey)
+                    parameter("outputsize", outputSize)
+                }.body<String>()
+            } catch (e: Exception) {
+                Metrics.recordAlphaVantageCall(symbol, "error")
+                Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
+                throw DataRetrievalException("Failed to fetch data for $symbol: ${e.message}", e)
+            }
 
         val root = try {
             json.parseToJsonElement(response).jsonObject
         } catch (e: Exception) {
             log.error("Invalid JSON response for {}: {}", symbol, e.message)
             log.debug("Raw response (first {} chars): {}", RAW_RESPONSE_LOG_LIMIT, response.take(RAW_RESPONSE_LOG_LIMIT))
+            Metrics.recordAlphaVantageCall(symbol, "error")
+            Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException("Invalid JSON response for $symbol", e)
         }
 
         if (root.containsKey(ERROR_MESSAGE_KEY)) {
             val msg = root[ERROR_MESSAGE_KEY]?.jsonPrimitive?.content ?: "Invalid symbol"
+            Metrics.recordAlphaVantageCall(symbol, "symbol_not_found")
+            Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw SymbolNotFoundException(msg)
         }
         if (root.containsKey(NOTE_KEY)) {
             val note = root[NOTE_KEY]?.jsonPrimitive?.content ?: "Rate limit or API notice"
+            Metrics.recordAlphaVantageCall(symbol, "rate_limit")
+            Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException(note)
         }
         if (root.containsKey(INFORMATION_KEY)) {
             val info = root[INFORMATION_KEY]?.jsonPrimitive?.content ?: "API information or rate limit"
             log.warn("Alpha Vantage returned 'Information' for {}: {}", symbol, info)
+            Metrics.recordAlphaVantageCall(symbol, "rate_limit")
+            Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException(info)
         }
 
@@ -84,6 +97,8 @@ class AlphaVantageService(
             val topLevelKeys = root.keys.joinToString(", ")
             log.error("Missing 'Time Series (Daily)' in response for {}. Top-level keys: {}", symbol, topLevelKeys)
             log.debug("Raw response (first {} chars): {}", RAW_RESPONSE_LOG_LIMIT, response.take(RAW_RESPONSE_LOG_LIMIT))
+            Metrics.recordAlphaVantageCall(symbol, "error")
+            Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException("Missing 'Time Series (Daily)' in response for $symbol. Top-level keys: $topLevelKeys")
         }
 
@@ -106,6 +121,8 @@ class AlphaVantageService(
             .sortedBy { it.date.toEpochDays() }
 
         if (prices.isEmpty()) {
+            Metrics.recordAlphaVantageCall(symbol, "no_data")
+            Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException(
                 if (useLimiterMessages)
                     "No data in the requested date range for $symbol. The free-tier API (outputsize=compact) returns only the last ~100 trading days (~4 months). For longer history, upgrade to a premium API key that supports outputsize=full."
@@ -114,6 +131,8 @@ class AlphaVantageService(
             )
         }
         if (prices.size < 2) {
+            Metrics.recordAlphaVantageCall(symbol, "insufficient_data")
+            Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException(
                 if (useLimiterMessages)
                     "Insufficient data for $symbol in the requested range (need at least 2 days). Free tier returns the last ~100 trading days; for a wider range, upgrade to a premium API key."
@@ -121,7 +140,12 @@ class AlphaVantageService(
                     "Insufficient data for $symbol in the requested range (need at least 2 days)."
             )
         }
+        Metrics.recordAlphaVantageCall(symbol, "success")
+        Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
         return prices
+    } finally {
+        // try block may return or throw; metrics already recorded on each path
+    }
     }
 
     /** Parses YYYY-MM-DD to [LocalDate]; returns null on parse failure. */

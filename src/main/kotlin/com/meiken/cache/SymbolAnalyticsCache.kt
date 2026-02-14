@@ -4,12 +4,14 @@ import com.meiken.calculator.FinancialCalculations
 import com.meiken.data.MarketDataService
 import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
+import com.meiken.observability.Metrics
 import com.github.benmanes.caffeine.cache.Caffeine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.datetime.LocalDate
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 private const val TRADING_DAYS = 252
 
@@ -52,6 +54,9 @@ class SymbolAnalyticsCacheService {
     /** In-flight computations per key. Coalesces concurrent misses for the same key so only one computes. */
     private val inProgress = ConcurrentHashMap<String, CompletableDeferred<SymbolAnalytics>>()
 
+    private val hitsCount = AtomicLong(0)
+    private val missesCount = AtomicLong(0)
+
     /**
      * Returns cached [SymbolAnalytics] if present; otherwise computes once, caches, and returns.
      * Thread-safe and safe for heavy concurrent use:
@@ -70,9 +75,15 @@ class SymbolAnalyticsCacheService {
     ): SymbolAnalytics {
         val key = "$symbol:$fromDate:$toDate"
         cache.getIfPresent(key)?.let { cached ->
+            hitsCount.incrementAndGet()
+            Metrics.recordCacheHit()
+            Metrics.setCacheSize(cache.estimatedSize().toInt())
+            Metrics.setCacheHitRate(getHitRate())
             log.info("SymbolAnalytics cache HIT: {}", key)
             return cached
         }
+        missesCount.incrementAndGet()
+        Metrics.recordCacheMiss()
         val newDeferred = CompletableDeferred<SymbolAnalytics>()
         val existing = inProgress.putIfAbsent(key, newDeferred)
         if (existing != null) {
@@ -99,6 +110,8 @@ class SymbolAnalyticsCacheService {
                 annualizedReturn = annualizedReturn
             )
             cache.put(key, analytics)
+            Metrics.setCacheSize(cache.estimatedSize().toInt())
+            Metrics.setCacheHitRate(getHitRate())
             newDeferred.complete(analytics)
             return analytics
         } catch (e: Throwable) {
@@ -107,5 +120,16 @@ class SymbolAnalyticsCacheService {
         } finally {
             inProgress.remove(key)
         }
+    }
+
+    /** Current number of entries in the cache (approximate). */
+    fun getEstimatedSize(): Long = cache.estimatedSize()
+
+    /** Hit rate (0.0–1.0) from hits and misses since startup. */
+    fun getHitRate(): Double {
+        val h = hitsCount.get()
+        val m = missesCount.get()
+        val total = h + m
+        return if (total == 0L) 0.0 else h.toDouble() / total
     }
 }

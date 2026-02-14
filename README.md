@@ -177,13 +177,74 @@ docker run -p 8080:8080 meiken
 docker run -p 8080:8080 -e ALPHA_VANTAGE_API_KEY=your_key meiken
 ```
 
+## Monitoring and observability
+
+The API exposes production-grade metrics and health for Prometheus and structured logging with correlation IDs.
+
+### Metrics endpoint (Prometheus)
+
+- **URL:** `GET http://localhost:8080/metrics`
+- **Content-Type:** `text/plain` (Prometheus exposition format)
+- Use for scraping by Prometheus or viewing raw metrics.
+
+**Example Prometheus scrape config** (`prometheus.yml`):
+
+```yaml
+scrape_configs:
+  - job_name: 'meiken'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['localhost:8080']
+```
+
+### Key metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `api_requests_total` | Counter | endpoint, status, method | Total API requests |
+| `api_request_duration_seconds` | Timer | endpoint | Request duration |
+| `in_flight_requests` | Gauge | — | Requests currently being processed |
+| `cache_hits_total` | Counter | — | Symbol analytics cache hits |
+| `cache_misses_total` | Counter | — | Symbol analytics cache misses |
+| `cache_size` | Gauge | — | Current cache entry count |
+| `cache_hit_rate` | Gauge | — | Hit rate (0.0–1.0) |
+| `alpha_vantage_calls_total` | Counter | symbol, status | Alpha Vantage API calls (status: success, error, rate_limit, symbol_not_found, no_data, insufficient_data) |
+| `alpha_vantage_request_duration_seconds` | Timer | — | Alpha Vantage request duration |
+
+### Example Grafana / PromQL queries
+
+- Request rate: `rate(api_requests_total[5m])`
+- P95 latency by endpoint: `histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) by (le, endpoint)`
+- Cache hit rate: `cache_hit_rate` or `rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m]))`
+- Alpha Vantage errors: `sum(rate(alpha_vantage_calls_total{status!="success"}[5m])) by (status)`
+
+### Health endpoint (enhanced)
+
+- **URL:** `GET http://localhost:8080/health`
+- Returns JSON with overall status (`healthy` | `degraded` | `unhealthy`), dependencies (Alpha Vantage connectivity, cache status with size and hit rate), and system info (memory, uptime).
+
+### Correlation ID and logging
+
+- Every request gets a **correlation ID** (generated or from `X-Correlation-ID` request header).
+- It is stored in MDC and added to the **response header** `X-Correlation-ID`.
+- Logs include the correlation ID when using the pattern format; in JSON format it is in the `correlationId` MDC field.
+- Use it to trace a request across logs and services.
+
+### Logging format
+
+- **Default:** JSON (Logstash encoder) with timestamp, level, logger, thread, message, MDC (`correlationId`, `requestId`, `userId`), and exception stack traces.
+- Override with your own `logback.xml` or set `MEIKEN_LOG_FORMAT=pattern` if you use a custom config that checks this.
+
+---
+
 ## Tech Stack
 
 - **Kotlin** 1.8, **Ktor** 2.3, **Gradle** (Kotlin DSL)
 - **kotlinx-datetime**, **kotlinx-serialization**, **kotlinx-coroutines**
 - **Ktor Client** (CIO) for Alpha Vantage
 - **Caffeine** for caching (when using real API)
-- **Logback** for logging
+- **Micrometer** + **Prometheus** for metrics
+- **Logback** + **logstash-logback-encoder** for JSON logging
 - **JUnit 5** for tests
 
 ## License
