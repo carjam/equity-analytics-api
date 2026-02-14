@@ -39,11 +39,13 @@ fun Application.configureRouting(
     marketDataService: MarketDataService? = null,
     analyticsCache: SymbolAnalyticsCacheService? = null,
     apiKeysEnabled: Boolean = false,
-    apiKeyManager: ApiKeyManager? = null
+    apiKeyManager: ApiKeyManager? = null,
+    circuitBreaker: io.github.resilience4j.circuitbreaker.CircuitBreaker? = null,
+    isShuttingDown: () -> Boolean = { false }
 ) {
     routing {
         get("/health") {
-            val (status, dependencies, system) = buildHealthDetails(marketDataService, analyticsCache)
+            val (status, dependencies, system) = buildHealthDetails(marketDataService, analyticsCache, circuitBreaker, isShuttingDown)
             val response = EnhancedHealthResponse(
                 status = status,
                 timestamp = Instant.now().toString(),
@@ -52,7 +54,8 @@ fun Application.configureRouting(
                 system = system
             )
             val body = healthJson.encodeToString(response)
-            call.respondText(body, ContentType.Application.Json, HttpStatusCode.OK)
+            val code = if (isShuttingDown()) HttpStatusCode.ServiceUnavailable else HttpStatusCode.OK
+            call.respondText(body, ContentType.Application.Json, code)
         }
         get("/metrics") {
             val body = prometheusRegistry?.scrape() ?: ""

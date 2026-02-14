@@ -39,13 +39,21 @@ data class EnhancedHealthResponse(
 )
 
 @Serializable
+data class CircuitBreakerHealth(
+    val state: String,
+    val failure_rate: Double? = null,
+    val slow_call_rate: Double? = null
+)
+
+@Serializable
 data class EnhancedDependencyStatus(
     val name: String,
     val status: String,
     val latency_ms: Long? = null,
     val message: String? = null,
     val size: Long? = null,
-    val hit_rate: Double? = null
+    val hit_rate: Double? = null,
+    val circuit_breaker: CircuitBreakerHealth? = null
 )
 
 @Serializable

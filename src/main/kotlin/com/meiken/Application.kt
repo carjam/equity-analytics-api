@@ -10,8 +10,10 @@ import com.meiken.error.DataRetrievalException
 import com.meiken.error.ErrorDetail
 import com.meiken.error.ErrorResponse
 import com.meiken.error.ExternalServiceException
+import com.meiken.error.CircuitBreakerOpenException
 import com.meiken.error.InvalidDateRangeException
 import com.meiken.error.RateLimitExceededException
+import com.meiken.error.RetryExhaustedException
 import com.meiken.error.SymbolNotFoundException
 import com.meiken.error.UnauthorizedException
 import com.meiken.security.ApiKeyManager
@@ -19,6 +21,11 @@ import com.meiken.security.SecurityConfig
 import com.meiken.security.TlsConfig
 import com.meiken.security.createSecurityHeadersPlugin
 import com.meiken.security.installRateLimiting
+import com.meiken.config.ResilienceConfig
+import com.meiken.resilience.CircuitBreakerConfig
+import com.meiken.resilience.RetryConfig
+import com.meiken.data.ResilientMarketDataService
+import com.meiken.lifecycle.ShutdownState
 import com.meiken.observability.Metrics
 import com.meiken.observability.ObservabilityPlugin
 import com.meiken.service.AlphaServiceImpl
@@ -38,7 +45,10 @@ import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.cio.endpoint
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
+import java.util.concurrent.TimeoutException
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 
@@ -95,6 +105,33 @@ fun Application.installStatusPages() {
             call.respond(
                 HttpStatusCode.TooManyRequests,
                 ErrorResponse(ErrorDetail("RATE_LIMIT_EXCEEDED", cause.message ?: "Rate limit exceeded. Retry later."))
+            )
+        }
+        exception<CircuitBreakerOpenException> { call, cause ->
+            cause.retryAfterSeconds?.let { call.response.headers.append(HttpHeaders.RetryAfter, it.toString()) }
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                ErrorResponse(ErrorDetail(
+                    "SERVICE_UNAVAILABLE",
+                    cause.message ?: "Alpha Vantage service is temporarily unavailable due to repeated failures. Please try again later.",
+                    details = mapOf(
+                        "retry_after_seconds" to (cause.retryAfterSeconds?.toString() ?: "60"),
+                        "circuit_breaker_state" to cause.circuitState
+                    )
+                ))
+            )
+        }
+        exception<TimeoutException> { call, cause ->
+            Metrics.recordRequestTimeout()
+            call.respond(
+                HttpStatusCode.GatewayTimeout,
+                ErrorResponse(ErrorDetail("GATEWAY_TIMEOUT", cause.message ?: "Request timed out. Please try again later."))
+            )
+        }
+        exception<RetryExhaustedException> { call, cause ->
+            call.respond(
+                HttpStatusCode.BadGateway,
+                ErrorResponse(ErrorDetail("RETRY_EXHAUSTED", cause.message ?: "Request failed after retries. Please try again later."))
             )
         }
         exception<Throwable> { call, cause ->
@@ -155,8 +192,16 @@ fun Application.module() {
 
     val apiKeyManager = ApiKeyManager(securityConfig.validApiKeys)
 
+    val resilienceConfig = ResilienceConfig.from(environment.config)
+    val circuitBreaker = CircuitBreakerConfig.createCircuitBreaker(resilienceConfig.circuitBreaker)
+    val retry = RetryConfig.createRetry(resilienceConfig.retry)
+
+    Runtime.getRuntime().addShutdownHook(Thread {
+        ShutdownState.signalShutdown()
+    })
+
     val environmentName = environment.config.propertyOrNull("meiken.environment")?.getString() ?: "development"
-    val marketDataService = createMarketDataService(environmentName)
+    val marketDataService = createMarketDataService(environmentName, resilienceConfig, circuitBreaker, retry)
     val analyticsCache = SymbolAnalyticsCacheService()
     val returnsService = ReturnsServiceImpl(analyticsCache, marketDataService)
     val alphaService = AlphaServiceImpl(analyticsCache, marketDataService)
@@ -169,25 +214,48 @@ fun Application.module() {
         marketDataService = marketDataService,
         analyticsCache = analyticsCache,
         apiKeysEnabled = securityConfig.apiKeysEnabled,
-        apiKeyManager = apiKeyManager
+        apiKeyManager = apiKeyManager,
+        circuitBreaker = circuitBreaker,
+        isShuttingDown = { ShutdownState.isShuttingDown() }
     )
 }
 
 /**
- * Creates [MarketDataService]: Alpha Vantage when ALPHA_VANTAGE_API_KEY is set, else Mock.
- * [environmentName]: "production" -> outputsize=full, no limiter messages; non-production -> outputsize=compact, limiter messages (upgrade hint when data missing). Driven by meiken.environment in application.conf or MEIKEN_ENVIRONMENT env.
+ * Creates [MarketDataService]: Alpha Vantage (with circuit breaker, retry, timeouts) when ALPHA_VANTAGE_API_KEY is set, else Mock.
  */
-private fun createMarketDataService(environmentName: String): MarketDataService {
+private fun createMarketDataService(
+    environmentName: String,
+    resilienceConfig: ResilienceConfig,
+    circuitBreaker: io.github.resilience4j.circuitbreaker.CircuitBreaker,
+    retry: io.github.resilience4j.retry.Retry
+): MarketDataService {
     val apiKey = System.getenv("ALPHA_VANTAGE_API_KEY")
     val isProduction = environmentName.equals("production", ignoreCase = true)
     return if (!apiKey.isNullOrBlank()) {
-        val client = HttpClient(CIO) { }
-        AlphaVantageService(
+        val timeout = resilienceConfig.timeout
+        val client = HttpClient(CIO) {
+            install(HttpTimeout) {
+                requestTimeoutMillis = timeout.alphaVantageTimeoutMs
+                connectTimeoutMillis = timeout.connectionTimeoutMs
+                socketTimeoutMillis = timeout.alphaVantageTimeoutMs
+            }
+            engine {
+                endpoint {
+                    connectTimeout = timeout.connectionTimeoutMs
+                    socketTimeout = timeout.alphaVantageTimeoutMs
+                    keepAliveTime = 60_000
+                    maxConnectionsPerRoute = 50
+                }
+            }
+        }
+        val delegate = AlphaVantageService(
             client = client,
             apiKey = apiKey,
             outputSize = if (isProduction) "full" else "compact",
             useLimiterMessages = !isProduction
         )
+        val waitSeconds = (resilienceConfig.circuitBreaker.waitDurationInOpenStateMs / 1000).toInt()
+        ResilientMarketDataService(delegate, circuitBreaker, retry, waitSeconds)
     } else {
         LoggerFactory.getLogger("com.meiken.Application")
             .warn("ALPHA_VANTAGE_API_KEY not set; using MockMarketDataService for development")

@@ -53,6 +53,12 @@ dependencies {
     
     // Cache
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+
+    // Resilience4j (1.7.x for Java 11; 2.x requires Java 17)
+    implementation("io.github.resilience4j:resilience4j-circuitbreaker:1.7.1")
+    implementation("io.github.resilience4j:resilience4j-retry:1.7.1")
+    implementation("io.github.resilience4j:resilience4j-timelimiter:1.7.1")
+    implementation("io.github.resilience4j:resilience4j-kotlin:1.7.1")
     
     // JUnit 5
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.2")

@@ -145,4 +145,78 @@ object Metrics {
     }
 
     fun getRegistry(): MeterRegistry? = registry
+
+    // --- Resilience: circuit_breaker_state, circuit_breaker_calls_total, retry_attempts_total, request_timeout_total, graceful_shutdown_duration_seconds ---
+
+    fun recordCircuitBreakerState(state: String) {
+        registry?.let { r ->
+            Gauge.builder("circuit_breaker_state", { stateToOrdinal(state).toDouble() })
+                .description("Circuit breaker state: 0=CLOSED, 1=OPEN, 2=HALF_OPEN")
+                .tag("app", "meiken")
+                .tag("name", "alphaVantage")
+                .tag("state", state)
+                .register(r)
+        }
+    }
+
+    fun recordCircuitBreakerCall(state: String, kind: String) {
+        registry?.let { r ->
+            Counter.builder("circuit_breaker_calls_total")
+                .description("Circuit breaker calls by state and kind")
+                .tag("app", "meiken")
+                .tag("name", "alphaVantage")
+                .tag("state", state)
+                .tag("kind", kind)
+                .register(r)
+                .increment()
+        }
+    }
+
+    fun registerCircuitBreakerGauge(name: String, valueSupplier: () -> Double) {
+        registry?.let { r ->
+            Gauge.builder("circuit_breaker_state_gauge", valueSupplier)
+                .description("Circuit breaker state gauge: 0=CLOSED, 1=OPEN, 2=HALF_OPEN")
+                .tag("app", "meiken")
+                .tag("name", name)
+                .register(r)
+        }
+    }
+
+    fun recordRetryAttempt(outcome: String) {
+        registry?.let { r ->
+            Counter.builder("retry_attempts_total")
+                .description("Retry attempts by outcome")
+                .tag("app", "meiken")
+                .tag("outcome", outcome)
+                .register(r)
+                .increment()
+        }
+    }
+
+    fun recordRequestTimeout() {
+        registry?.let { r ->
+            Counter.builder("request_timeout_total")
+                .description("Total request timeouts")
+                .tag("app", "meiken")
+                .register(r)
+                .increment()
+        }
+    }
+
+    fun recordGracefulShutdownDuration(seconds: Double) {
+        registry?.let { r ->
+            Timer.builder("graceful_shutdown_duration_seconds")
+                .description("Graceful shutdown duration in seconds")
+                .tag("app", "meiken")
+                .register(r)
+                .record((seconds * 1_000).toLong(), TimeUnit.MILLISECONDS)
+        }
+    }
+
+    private fun stateToOrdinal(state: String): Int = when (state.uppercase()) {
+        "CLOSED" -> 0
+        "OPEN" -> 1
+        "HALF_OPEN" -> 2
+        else -> -1
+    }
 }

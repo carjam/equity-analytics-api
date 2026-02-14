@@ -4,20 +4,43 @@ import com.meiken.cache.SymbolAnalyticsCacheService
 import com.meiken.data.MarketDataService
 import com.meiken.util.getCurrentYearStart
 import com.meiken.util.getToday
+import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import kotlinx.coroutines.runBlocking
 import java.lang.management.ManagementFactory
 
 fun buildHealthDetails(
     marketDataService: MarketDataService?,
-    analyticsCache: SymbolAnalyticsCacheService?
+    analyticsCache: SymbolAnalyticsCacheService?,
+    circuitBreaker: CircuitBreaker? = null,
+    isShuttingDown: () -> Boolean = { false }
 ): Triple<String, List<EnhancedDependencyStatus>, SystemStatus> {
     val dependencies = mutableListOf<EnhancedDependencyStatus>()
     var anyDown = false
     var anyDegraded = false
 
-    if (marketDataService != null) {
+    if (isShuttingDown()) {
+        anyDown = true
+        dependencies.add(
+            EnhancedDependencyStatus(
+                name = "application",
+                status = "down",
+                message = "Application is shutting down"
+            )
+        )
+    }
+
+    if (marketDataService != null && !isShuttingDown()) {
+        val cbState = circuitBreaker?.state?.name
+        val cbMetrics = circuitBreaker?.metrics
+        val failureRate = cbMetrics?.failureRate?.toDouble()
+        val slowCallRate = cbMetrics?.slowCallRate?.toDouble()
+        val circuitOpen = cbState == "OPEN"
+        if (circuitOpen) anyDegraded = true
+
         val start = System.currentTimeMillis()
-        val tri = try {
+        val tri = if (circuitOpen) {
+            Triple("down", (System.currentTimeMillis() - start).toLong(), "Circuit breaker OPEN")
+        } else try {
             runBlocking {
                 val from = getCurrentYearStart()
                 val to = getToday()
@@ -33,7 +56,12 @@ fun buildHealthDetails(
                 name = "alpha_vantage",
                 status = tri.first,
                 latency_ms = tri.second,
-                message = tri.third
+                message = tri.third,
+                circuit_breaker = if (circuitBreaker != null) CircuitBreakerHealth(
+                    state = circuitBreaker.state.name,
+                    failure_rate = failureRate,
+                    slow_call_rate = slowCallRate
+                ) else null
             )
         )
     }

@@ -34,3 +34,17 @@ class UnauthorizedException(message: String = "Missing or invalid API key") : Ru
  * Thrown when rate limit is exceeded (429 Too Many Requests).
  */
 class RateLimitExceededException(message: String = "Rate limit exceeded", val retryAfterSeconds: Int? = null) : RuntimeException(message)
+
+/**
+ * Thrown when the circuit breaker is OPEN (Alpha Vantage temporarily unavailable).
+ */
+class CircuitBreakerOpenException(
+    message: String = "Alpha Vantage service is temporarily unavailable due to repeated failures",
+    val retryAfterSeconds: Int? = null,
+    val circuitState: String = "OPEN"
+) : RuntimeException(message)
+
+/**
+ * Thrown when all retry attempts for an external call have been exhausted.
+ */
+class RetryExhaustedException(message: String = "Request failed after retries", cause: Throwable? = null) : RuntimeException(message, cause)

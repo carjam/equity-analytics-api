@@ -223,6 +223,50 @@ Every response includes:
 - In production, set `ALLOWED_ORIGINS`, enable API keys, and use HTTPS (reverse proxy or in-app TLS).
 - Monitor `api_key_usage_total` and `api_key_authentication_failures_total` (Prometheus) for auditing.
 
+## Resilience
+
+The API uses **Resilience4j** for circuit breaker, retry, timeouts, and graceful shutdown when calling Alpha Vantage.
+
+### Circuit breaker (Alpha Vantage)
+
+- **Purpose:** Stops calling Alpha Vantage when failure rate or slow-call rate is too high; fails fast when the circuit is OPEN.
+- **Config:** `meiken.resilience.circuitBreaker` in `application.conf`:
+  - `failureRateThreshold`: 50 (open when &gt;50% of calls fail)
+  - `slowCallDurationThreshold`: 5000 ms
+  - `minimumNumberOfCalls`: 5 (evaluate only after at least 5 calls)
+  - `waitDurationInOpenState`: 60000 ms (then try HALF_OPEN)
+  - `permittedNumberOfCallsInHalfOpenState`: 3
+- **States:** CLOSED → OPEN (after threshold) → HALF_OPEN (after wait) → CLOSED (if probes succeed).
+- **When OPEN:** API returns **503 Service Unavailable** with `SERVICE_UNAVAILABLE` and `retry_after_seconds` / `circuit_breaker_state` in details.
+- **Health:** `/health` includes `circuit_breaker` for `alpha_vantage` (state, failure_rate, slow_call_rate). Overall status is **degraded** when the circuit is OPEN.
+
+### Retry (Alpha Vantage)
+
+- **Purpose:** Retries transient failures (network, timeouts, rate limit) with exponential backoff.
+- **Config:** `meiken.resilience.retry`:
+  - `maxAttempts`: 3
+  - `waitDuration`: 100 ms, `multiplier`: 2, `maxWaitDuration`: 1000 ms (100 → 200 → 400 ms).
+- **Retried:** IOException, SocketTimeoutException, transient DataRetrievalException (e.g. rate limit).
+- **Not retried:** SymbolNotFoundException, 4xx client errors (except 429), validation errors.
+
+### Timeouts
+
+- **Alpha Vantage HTTP client:** `meiken.resilience.timeout.alphaVantageTimeout` (default 30 s), `connectionTimeout` (default 10 s).
+- **Connection pool:** Keep-alive 60 s, up to 50 connections per route (CIO).
+- **On timeout:** **504 Gateway Timeout** with `GATEWAY_TIMEOUT`.
+
+### Graceful shutdown
+
+- **Shutdown hook:** On SIGTERM/SIGINT, the app sets a shutdown flag and waits up to 30 s before exit.
+- **Health during shutdown:** `/health` returns **503** with status "Application is shutting down" so load balancers can remove the instance.
+- **Metric:** `graceful_shutdown_duration_seconds` records how long the shutdown wait ran.
+
+### Monitoring circuit breaker
+
+- **Metrics:** `circuit_breaker_state_gauge` (0=CLOSED, 1=OPEN, 2=HALF_OPEN), `circuit_breaker_calls_total` (state, kind).
+- **Health:** `GET /health` → `dependencies[].circuit_breaker` for `alpha_vantage` (state, failure_rate, slow_call_rate).
+- **When circuit is OPEN:** Reduce traffic to Alpha Vantage, check upstream health and rate limits; after `waitDurationInOpenState` the circuit moves to HALF_OPEN and a few test calls are allowed.
+
 ## Tests
 
 ```bash
@@ -285,6 +329,11 @@ scrape_configs:
 | `alpha_vantage_request_duration_seconds` | Timer | — | Alpha Vantage request duration |
 | `api_key_usage_total` | Counter | key_id, endpoint | API key usage (when API key auth is enabled) |
 | `api_key_authentication_failures_total` | Counter | — | Failed API key authentication attempts |
+| `circuit_breaker_state_gauge` | Gauge | name | Circuit breaker state (0=CLOSED, 1=OPEN, 2=HALF_OPEN) |
+| `circuit_breaker_calls_total` | Counter | name, state, kind | Circuit breaker calls (success, error, call_not_permitted) |
+| `retry_attempts_total` | Counter | outcome | Retry attempts by outcome |
+| `request_timeout_total` | Counter | — | Request timeouts |
+| `graceful_shutdown_duration_seconds` | Timer | — | Graceful shutdown wait duration |
 
 ### Example Grafana / PromQL queries
 
@@ -296,7 +345,9 @@ scrape_configs:
 ### Health endpoint (enhanced)
 
 - **URL:** `GET http://localhost:8080/health`
-- Returns JSON with overall status (`healthy` | `degraded` | `unhealthy`), dependencies (Alpha Vantage connectivity, cache status with size and hit rate), and system info (memory, uptime).
+- Returns JSON with overall status (`healthy` | `degraded` | `unhealthy`), dependencies (Alpha Vantage connectivity and circuit breaker state, cache status with size and hit rate), and system info (memory, uptime).
+- When the Alpha Vantage circuit breaker is OPEN, the `alpha_vantage` dependency includes `circuit_breaker: { state, failure_rate, slow_call_rate }` and overall status is **degraded**.
+- During graceful shutdown, the endpoint returns **503** with a dependency indicating "Application is shutting down".
 
 ### Correlation ID and logging
 
@@ -316,7 +367,8 @@ scrape_configs:
 
 - **Kotlin** 1.8, **Ktor** 2.3, **Gradle** (Kotlin DSL)
 - **kotlinx-datetime**, **kotlinx-serialization**, **kotlinx-coroutines**
-- **Ktor Client** (CIO) for Alpha Vantage
+- **Ktor Client** (CIO) for Alpha Vantage (connection pool, timeouts)
+- **Resilience4j** for circuit breaker, retry, and resilience metrics
 - **Caffeine** for caching (when using real API)
 - **Micrometer** + **Prometheus** for metrics
 - **Logback** + **logstash-logback-encoder** for JSON logging
