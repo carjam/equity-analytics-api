@@ -1,0 +1,487 @@
+# Meiken - Architecture Design
+
+## Technology Stack
+
+### Core Framework
+- **Language**: Kotlin 1.9+
+- **Framework**: Ktor (lightweight, async REST framework)
+- **Build Tool**: Gradle (Kotlin DSL)
+- **JVM**: Java 17+
+
+### Libraries
+- **HTTP Client**: Ktor Client (for Alpha Vantage API calls)
+- **JSON Serialization**: kotlinx.serialization
+- **Logging**: SLF4J + Logback
+- **Testing**: 
+  - JUnit 5
+  - Ktor Test
+  - MockK (mocking framework)
+  - Kotest (assertions)
+- **Date/Time**: kotlinx-datetime
+- **Coroutines**: kotlinx.coroutines
+
+---
+
+## Architecture Pattern
+
+### Layered Architecture
+
+```
+┌─────────────────────────────────────┐
+│         REST API Layer              │
+│  (Controllers/Routes - Ktor)        │
+└─────────────┬───────────────────────┘
+              │
+┌─────────────▼───────────────────────┐
+│         Service Layer               │
+│  (Business Logic & Calculations)    │
+└─────────────┬───────────────────────┘
+              │
+┌─────────────▼───────────────────────┐
+│      Data Access Layer              │
+│  (Market Data Service Abstraction)  │
+└─────────────┬───────────────────────┘
+              │
+┌─────────────▼───────────────────────┐
+│      External APIs / Cache          │
+│    (Alpha Vantage, Redis)           │
+└─────────────────────────────────────┘
+```
+
+---
+
+## Component Design
+
+### 1. REST API Layer (`api` package)
+
+**Responsibilities**:
+- Route definition and HTTP handling
+- Request validation and parsing
+- Response formatting
+- Error handling and HTTP status codes
+
+**Key Classes**:
+```kotlin
+// Route definitions
+fun Application.configureRouting()
+fun Route.returnsRoutes()
+fun Route.alphaRoutes()
+fun Route.analyticsRoutes()
+
+// Request/Response DTOs
+data class ReturnsRequest(...)
+data class ReturnsResponse(...)
+data class AlphaRequest(...)
+data class AlphaResponse(...)
+```
+
+### 2. Service Layer (`service` package)
+
+**Responsibilities**:
+- Business logic implementation
+- Financial calculations
+- Data validation
+- Orchestration of data access
+
+**Key Classes**:
+```kotlin
+interface ReturnsService {
+    suspend fun calculateReturns(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): Returns
+}
+
+interface AlphaService {
+    suspend fun calculateAlpha(
+        targetSymbol: String,
+        benchmarkSymbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): Alpha
+}
+
+interface AnalyticsService {
+    suspend fun calculateVolatility(...)
+    suspend fun calculateSharpe(...)
+    suspend fun calculateBeta(...)
+    suspend fun calculateRollingCorrelation(...)
+}
+```
+
+### 3. Calculation Engine (`calculator` package)
+
+**Responsibilities**:
+- Pure financial calculations
+- Numerical algorithms
+- No I/O or side effects
+
+**Key Classes**:
+```kotlin
+object FinancialCalculations {
+    fun calculateDailyReturns(prices: List<DailyPrice>): List<DailyReturn>
+    fun calculateAlpha(targetReturns: List<Double>, benchmarkReturns: List<Double>): Double
+    fun calculateBeta(targetReturns: List<Double>, benchmarkReturns: List<Double>): Double
+    fun calculateVolatility(returns: List<Double>): Double
+    fun calculateSharpe(returns: List<Double>, riskFreeRate: Double): Double
+    fun calculateRollingCorrelation(series1: List<Double>, series2: List<Double>, window: Int): List<Double>
+    
+    // Helper functions
+    fun annualizeReturn(avgDailyReturn: Double, tradingDays: Int = 252): Double
+    fun annualizeVolatility(dailyVolatility: Double, tradingDays: Int = 252): Double
+}
+
+object StatisticalCalculations {
+    fun mean(values: List<Double>): Double
+    fun variance(values: List<Double>): Double
+    fun standardDeviation(values: List<Double>): Double
+    fun covariance(series1: List<Double>, series2: List<Double>): Double
+    fun correlation(series1: List<Double>, series2: List<Double>): Double
+}
+```
+
+### 4. Data Access Layer (`data` package)
+
+**Responsibilities**:
+- Abstract market data retrieval
+- Cache management
+- External API integration
+
+**Key Interfaces**:
+```kotlin
+interface MarketDataService {
+    suspend fun getHistoricalPrices(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): Result<List<DailyPrice>>
+    
+    suspend fun validateSymbol(symbol: String): Boolean
+}
+
+// Implementations
+class AlphaVantageService(
+    private val apiKey: String,
+    private val httpClient: HttpClient,
+    private val cache: Cache<String, List<DailyPrice>>
+) : MarketDataService
+
+class MockMarketDataService : MarketDataService
+```
+
+### 5. Domain Models (`model` package)
+
+**Key Data Classes**:
+```kotlin
+data class DailyPrice(
+    val date: LocalDate,
+    val close: Double,
+    val open: Double? = null,
+    val high: Double? = null,
+    val low: Double? = null,
+    val volume: Long? = null
+)
+
+data class DailyReturn(
+    val date: LocalDate,
+    val returnValue: Double
+)
+
+data class Returns(
+    val symbol: String,
+    val fromDate: LocalDate,
+    val toDate: LocalDate,
+    val dailyReturns: List<DailyReturn>,
+    val metadata: ReturnsMetadata
+)
+
+data class Alpha(
+    val target: String,
+    val benchmark: String,
+    val fromDate: LocalDate,
+    val toDate: LocalDate,
+    val alpha: Double,
+    val metadata: AlphaMetadata
+)
+```
+
+### 6. Error Handling (`error` package)
+
+**Custom Exceptions**:
+```kotlin
+sealed class MeikenException(message: String) : Exception(message)
+
+class InvalidDateRangeException(message: String) : MeikenException(message)
+class SymbolNotFoundException(symbol: String) : MeikenException("Symbol not found: $symbol")
+class DataRetrievalException(message: String) : MeikenException(message)
+class InsufficientDataException(message: String) : MeikenException(message)
+class CalculationException(message: String) : MeikenException(message)
+
+data class ErrorResponse(
+    val error: ErrorDetail
+)
+
+data class ErrorDetail(
+    val code: String,
+    val message: String,
+    val details: Map<String, Any>? = null
+)
+```
+
+---
+
+## Project Structure
+
+```
+meiken/
+├── docs/
+│   ├── SPEC.md
+│   ├── ARCHITECTURE.md
+│   ├── API.md (OpenAPI/Swagger)
+│   └── IMPLEMENTATION.md
+├── src/
+│   ├── main/
+│   │   ├── kotlin/
+│   │   │   └── com/meiken/
+│   │   │       ├── Application.kt (main entry point)
+│   │   │       ├── api/
+│   │   │       │   ├── Routes.kt
+│   │   │       │   ├── ReturnsRoutes.kt
+│   │   │       │   ├── AlphaRoutes.kt
+│   │   │       │   └── AnalyticsRoutes.kt
+│   │   │       ├── service/
+│   │   │       │   ├── ReturnsService.kt
+│   │   │       │   ├── ReturnsServiceImpl.kt
+│   │   │       │   ├── AlphaService.kt
+│   │   │       │   ├── AlphaServiceImpl.kt
+│   │   │       │   ├── AnalyticsService.kt
+│   │   │       │   └── AnalyticsServiceImpl.kt
+│   │   │       ├── calculator/
+│   │   │       │   ├── FinancialCalculations.kt
+│   │   │       │   └── StatisticalCalculations.kt
+│   │   │       ├── data/
+│   │   │       │   ├── MarketDataService.kt
+│   │   │       │   ├── AlphaVantageService.kt
+│   │   │       │   └── MockMarketDataService.kt
+│   │   │       ├── model/
+│   │   │       │   ├── DailyPrice.kt
+│   │   │       │   ├── DailyReturn.kt
+│   │   │       │   ├── Returns.kt
+│   │   │       │   ├── Alpha.kt
+│   │   │       │   └── Analytics.kt
+│   │   │       ├── error/
+│   │   │       │   ├── Exceptions.kt
+│   │   │       │   └── ErrorResponse.kt
+│   │   │       ├── config/
+│   │   │       │   └── AppConfig.kt
+│   │   │       └── util/
+│   │   │           ├── DateUtils.kt
+│   │   │           └── ValidationUtils.kt
+│   │   └── resources/
+│   │       ├── application.conf
+│   │       └── logback.xml
+│   └── test/
+│       ├── kotlin/
+│       │   └── com/meiken/
+│       │       ├── api/
+│       │       │   └── ReturnsRoutesTest.kt
+│       │       ├── service/
+│       │       │   └── ReturnsServiceTest.kt
+│       │       ├── calculator/
+│       │       │   └── FinancialCalculationsTest.kt
+│       │       └── data/
+│       │           └── AlphaVantageServiceTest.kt
+│       └── resources/
+│           └── test-data/
+│               └── sample-prices.json
+├── gradle/
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradlew
+├── gradlew.bat
+├── .gitignore
+└── README.md
+```
+
+---
+
+## Configuration Management
+
+### application.conf
+```hocon
+ktor {
+    deployment {
+        port = 8080
+        port = ${?PORT}
+    }
+    application {
+        modules = [ com.meiken.ApplicationKt.module ]
+    }
+}
+
+meiken {
+    alphaVantage {
+        apiKey = ${ALPHA_VANTAGE_API_KEY}
+        baseUrl = "https://www.alphavantage.co/query"
+        timeout = 30000
+    }
+    
+    cache {
+        ttl = 3600 // 1 hour in seconds
+        maxSize = 1000
+    }
+    
+    rateLimit {
+        requestsPerMinute = 100
+    }
+    
+    dateRanges {
+        maxDays = 365
+    }
+}
+```
+
+---
+
+## Data Flow
+
+### Example: Get Returns Request
+
+```
+1. HTTP Request arrives at Ktor
+   GET /api/v1/tickers/AAPL/returns?from_date=2024-01-01&to_date=2024-06-30
+
+2. Route handler validates and parses request
+   - Validates ticker format
+   - Parses and validates dates
+   - Checks date range <= 365 days
+
+3. Calls ReturnsService
+   service.calculateReturns("AAPL", fromDate, toDate)
+
+4. ReturnsService orchestrates:
+   a. Call MarketDataService to get historical prices
+   b. Cache check first, API call if miss
+   c. Call FinancialCalculations.calculateDailyReturns()
+   d. Build Returns domain object with metadata
+
+5. Route handler converts to ReturnsResponse DTO
+   - Serializes to JSON
+   - Returns HTTP 200 with body
+
+Error flows:
+- Validation error → HTTP 400 with ErrorResponse
+- Symbol not found → HTTP 404 with ErrorResponse
+- Data retrieval failure → HTTP 500 with ErrorResponse
+```
+
+---
+
+## Caching Strategy
+
+### Cache Key Format
+```
+market_data:{symbol}:{from_date}:{to_date}
+```
+
+### Cache Behavior
+- TTL: 1 hour (configurable)
+- Eviction: LRU (Least Recently Used)
+- Size limit: 1000 entries (configurable)
+
+### Implementation
+Use Caffeine cache or similar in-memory cache.
+
+---
+
+## Alpha Vantage Integration
+
+### API Endpoints Used
+- **TIME_SERIES_DAILY_ADJUSTED**: Get daily historical prices
+
+### Rate Limits
+- Free tier: 25 requests per day, 5 per minute
+- Premium tier: Higher limits
+
+### Handling Rate Limits
+1. Implement exponential backoff
+2. Queue requests if needed
+3. Cache aggressively
+4. Return clear error messages to users
+
+### Response Parsing
+```kotlin
+{
+  "Meta Data": {...},
+  "Time Series (Daily)": {
+    "2024-01-02": {
+      "1. open": "185.64",
+      "2. high": "186.19",
+      "3. low": "184.27",
+      "4. close": "185.64",
+      "5. adjusted close": "184.35",
+      "6. volume": "58414460"
+    }
+  }
+}
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+- Test all calculation functions with known inputs/outputs
+- Test edge cases: zero returns, negative returns, single data point
+- Test statistical accuracy against reference implementations
+
+### Integration Tests
+- Test full API endpoints with mock data service
+- Test error handling paths
+- Test validation logic
+
+### Performance Tests
+- Load testing with various data set sizes
+- Ensure <500ms response time for typical requests
+- Test with 1 year of daily data (~252 data points)
+
+### Test Data
+Create realistic test datasets:
+- Normal market conditions
+- High volatility periods
+- Bear market, bull market
+- Missing data / gaps
+
+---
+
+## Deployment Considerations
+
+### Docker
+```dockerfile
+FROM openjdk:17-alpine
+COPY build/libs/meiken-all.jar /app/meiken.jar
+EXPOSE 8080
+CMD ["java", "-jar", "/app/meiken.jar"]
+```
+
+### Environment Variables
+- `ALPHA_VANTAGE_API_KEY`: API key for Alpha Vantage
+- `PORT`: HTTP port (default: 8080)
+- `LOG_LEVEL`: Logging level (default: INFO)
+
+### Health Check
+Implement `/health` endpoint for container orchestration.
+
+---
+
+## Future Enhancements
+
+1. **Database Integration**: Store historical data locally
+2. **WebSocket Support**: Real-time price updates
+3. **Authentication**: API keys or OAuth
+4. **Advanced Analytics**: Machine learning models
+5. **Multi-currency Support**: FX conversion
+6. **Batch Processing**: Multiple symbols in one request
+7. **GraphQL API**: Alternative to REST
+8. **Rate Limiting**: Per-user quotas
