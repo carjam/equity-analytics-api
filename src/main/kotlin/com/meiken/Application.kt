@@ -1,7 +1,9 @@
 package com.meiken
 
 import com.meiken.api.configureRouting
+import com.meiken.data.AlphaVantageService
 import com.meiken.data.MockMarketDataService
+import com.meiken.data.MarketDataService
 import com.meiken.error.BadRequestException
 import com.meiken.error.DataRetrievalException
 import com.meiken.error.ErrorDetail
@@ -21,7 +23,10 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.HttpClient
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
@@ -35,37 +40,40 @@ fun Application.installStatusPages() {
         exception<InvalidDateRangeException> { call, cause ->
             call.respond(
                 HttpStatusCode.BadRequest,
-                ErrorResponse(ErrorDetail("INVALID_DATE_RANGE", cause.message ?: "Invalid date range"))
+                ErrorResponse(ErrorDetail(
+                    "INVALID_DATE_RANGE",
+                    cause.message ?: "Invalid date range. Use from_date ≤ to_date, no future dates, and span at most 365 days."
+                ))
             )
         }
         exception<SymbolNotFoundException> { call, cause ->
             call.respond(
                 HttpStatusCode.NotFound,
-                ErrorResponse(ErrorDetail("SYMBOL_NOT_FOUND", cause.message ?: "Symbol not found"))
+                ErrorResponse(ErrorDetail("SYMBOL_NOT_FOUND", cause.message ?: "Symbol not found. Check the ticker and try again."))
             )
         }
         exception<BadRequestException> { call, cause ->
             call.respond(
                 HttpStatusCode.BadRequest,
-                ErrorResponse(ErrorDetail("BAD_REQUEST", cause.message ?: "Bad request"))
+                ErrorResponse(ErrorDetail("BAD_REQUEST", cause.message ?: "Bad request. Check parameters and format (e.g. YYYY-MM-DD for dates)."))
             )
         }
         exception<DataRetrievalException> { call, cause ->
             call.respond(
                 HttpStatusCode.InternalServerError,
-                ErrorResponse(ErrorDetail("DATA_RETRIEVAL_ERROR", cause.message ?: "Data retrieval failed"))
+                ErrorResponse(ErrorDetail("DATA_RETRIEVAL_ERROR", cause.message ?: "Data retrieval failed. Please try again later."))
             )
         }
         exception<ExternalServiceException> { call, cause ->
             call.respond(
                 HttpStatusCode.BadGateway,
-                ErrorResponse(ErrorDetail("EXTERNAL_SERVICE_ERROR", cause.message ?: "External service error"))
+                ErrorResponse(ErrorDetail("EXTERNAL_SERVICE_ERROR", cause.message ?: "External service error. Please try again later."))
             )
         }
         exception<Throwable> { call, cause ->
             call.respond(
                 HttpStatusCode.InternalServerError,
-                ErrorResponse(ErrorDetail("INTERNAL_ERROR", cause.message ?: "Internal server error"))
+                ErrorResponse(ErrorDetail("INTERNAL_ERROR", cause.message ?: "An unexpected error occurred. Please try again later."))
             )
         }
     }
@@ -73,7 +81,7 @@ fun Application.installStatusPages() {
 
 /**
  * Main application module: installs ContentNegotiation (JSON), StatusPages, CallLogging, CORS,
- * then creates MockMarketDataService and all services (returns, alpha, analytics) and wires routing.
+ * then creates MarketDataService (Alpha Vantage if ALPHA_VANTAGE_API_KEY set, else Mock) and wires routing.
  */
 fun Application.module() {
     install(ContentNegotiation) {
@@ -89,9 +97,24 @@ fun Application.module() {
         anyHost()
     }
 
-    val marketDataService = MockMarketDataService()
+    val marketDataService = createMarketDataService()
     val returnsService = ReturnsServiceImpl(marketDataService)
     val alphaService = AlphaServiceImpl(marketDataService)
     val analyticsService = AnalyticsServiceImpl(marketDataService)
     configureRouting(returnsService, alphaService, analyticsService)
+}
+
+/**
+ * Uses Alpha Vantage when ALPHA_VANTAGE_API_KEY is set; otherwise logs a warning and uses MockMarketDataService for development.
+ */
+private fun createMarketDataService(): MarketDataService {
+    val apiKey = System.getenv("ALPHA_VANTAGE_API_KEY")
+    return if (!apiKey.isNullOrBlank()) {
+        val client = HttpClient(CIO) { }
+        AlphaVantageService(client, apiKey)
+    } else {
+        LoggerFactory.getLogger("com.meiken.Application")
+            .warn("ALPHA_VANTAGE_API_KEY not set; using MockMarketDataService for development")
+        MockMarketDataService()
+    }
 }

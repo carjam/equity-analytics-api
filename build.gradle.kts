@@ -88,6 +88,21 @@ application {
     mainClass.set("com.meiken.ApplicationKt")
 }
 
+// Fat JAR for Docker (includes all dependencies)
+tasks.register<Jar>("fatJar") {
+    archiveBaseName.set("meiken")
+    archiveClassifier.set("all")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes["Main-Class"] = "com.meiken.ApplicationKt"
+    }
+    from(sourceSets.main.get().output)
+    dependsOn(configurations.runtimeClasspath)
+    from({
+        configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }
+    })
+}
+
 kotlin {
     jvmToolchain(11)
 }

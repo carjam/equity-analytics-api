@@ -1,197 +1,153 @@
-# Meiken - Financial Analytics REST API
+# Meiken
 
-**Meiken** (銘柄検索) - Ticker Lookup & Financial Analytics
+A Kotlin/Ktor REST API for financial analytics: daily returns, alpha, volatility, beta, Sharpe ratio, and rolling correlation. Uses Alpha Vantage for real market data (or mock data when no API key is set).
 
-A REST API for computing comprehensive financial analytics on stock market data, including returns, alpha, beta, volatility, Sharpe ratio, and correlation analysis.
+## Quick Start
 
-## 📊 Phase 4: Calculation Engine ✅ COMPLETE
-
-### What's Implemented
-
-#### Model Classes
-- **DailyPrice** - Historical pricing data (date, close, open, high, low, volume)
-- **DailyReturn** - Calculated daily returns from price changes
-
-#### Financial Calculations (6 methods)
-1. **calculateDailyReturns** - Compute daily percentage returns
-2. **annualizeReturn** - Convert daily to annualized returns (252 trading days)
-3. **calculateAlpha** - Excess return vs benchmark
-4. **calculateBeta** - Systematic risk measure
-5. **calculateVolatility** - Both daily and annualized
-6. **calculateSharpe** - Risk-adjusted returns
-
-#### Statistical Calculations (5 methods)
-1. **mean** - Arithmetic average
-2. **variance** - Distribution spread
-3. **standardDeviation** - Volatility measure
-4. **covariance** - Joint variability between series
-5. **correlation** - Normalized relationship (-1 to 1)
-
-#### Test Suite (8 tests)
-Comprehensive unit tests covering:
-- Happy path scenarios
-- Edge cases (negative returns, decreasing prices)
-- Error handling (insufficient data)
-- Numerical accuracy validation
-
-### Technical Stack
-
-- **Language**: Kotlin 1.8.20
-- **Build**: Gradle 7.6.1 or Maven 3.9+
-- **Testing**: JUnit 5 (Jupiter)
-- **Date Handling**: kotlinx.datetime
-- **Serialization**: kotlinx.serialization
-- **Target JVM**: Java 11+
-
-## 🚀 Quick Start
-
-### Build with Maven (Recommended)
-```bash
-mvn clean test
-```
-
-### Build with Gradle
-```bash
-gradle clean test --no-daemon
-```
-
-### Verify Implementation (No Build Tool)
-```bash
-bash verify.sh
-```
-
-## 📚 Documentation
-
-- **[docs/QUICK_START.md](docs/QUICK_START.md)** - Get building in 5 minutes
-- **[docs/BUILD.md](docs/BUILD.md)** - Detailed build troubleshooting
-- **[docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md)** - Diagnostic guide
-- **[docs/IMPLEMENTATION_REPORT.md](docs/IMPLEMENTATION_REPORT.md)** - Complete implementation details
-- **[docs/PHASE4_COMPLETE.md](docs/PHASE4_COMPLETE.md)** - Phase 4 summary
-- **[docs/PHASE4_STATUS.md](docs/PHASE4_STATUS.md)** - Implementation status
-- **[docs/SPEC.md](docs/SPEC.md)** - API specification
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System design
-- **[docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)** - Implementation guide
-
-## 📁 Project Structure
-
-```
-meiken/
-├── src/
-│   ├── main/kotlin/com/meiken/
-│   │   ├── model/
-│   │   │   ├── DailyPrice.kt          ✅
-│   │   │   └── DailyReturn.kt         ✅
-│   │   └── calculator/
-│   │       ├── FinancialCalculations.kt ✅
-│   │       └── StatisticalCalculations.kt ✅
-│   └── test/kotlin/com/meiken/calculator/
-│       └── FinancialCalculationsTest.kt ✅ (8 tests)
-├── build.gradle.kts                    ✅
-├── pom.xml                             ✅
-├── gradle/wrapper/gradle-wrapper.properties
-├── gradlew                             
-└── docs/
-    ├── SPEC.md
-    ├── ARCHITECTURE.md
-    └── IMPLEMENTATION.md
-```
-
-## 🧮 Financial Formulas
-
-All formulas properly implemented and tested:
-
-| Metric | Formula | Implementation |
-|--------|---------|-----------------|
-| Daily Return | (P_t - P_{t-1}) / P_{t-1} | `calculateDailyReturns()` |
-| Annualized Return | (1 + r_daily)^252 - 1 | `annualizeReturn()` |
-| Alpha | R_target - R_benchmark (annualized) | `calculateAlpha()` |
-| Beta | Cov(target, benchmark) / Var(benchmark) | `calculateBeta()` |
-| Volatility | σ_daily × √252 | `calculateVolatility()` |
-| Sharpe Ratio | (R_p - R_f) / σ_p | `calculateSharpe()` |
-
-## ✅ Implementation Checklist
-
-- [x] 5 Kotlin source files created
-- [x] 2 model classes with @Serializable
-- [x] 2 calculator classes (11 total methods)
-- [x] 8 comprehensive unit tests
-- [x] Financial formula implementation
-- [x] Statistical calculations
-- [x] Input validation & error handling
-- [x] Gradle build configuration
-- [x] Maven build configuration
-- [x] Documentation (6 files)
-
-## 🧪 Running Tests
-
-### Maven
-```bash
-mvn clean test
-```
-
-### Gradle
-```bash
-gradle clean test
-gradle test --tests FinancialCalculationsTest
-gradle test --tests FinancialCalculationsTest.*Daily*
-```
-
-### Expected Output
-```
-Tests run: 8, Failures: 0, Errors: 0 ✅
-```
-
-## 🔨 Build Troubleshooting
-
-If you encounter build errors:
-
-1. **Clear cache**
+1. **Build and run** (mock data; no API key required):
    ```bash
-   gradle --stop
-   rm -rf .gradle build ~/.gradle
+   ./gradlew run
+   ```
+   On Windows: `.\gradlew.bat run`
+
+2. **Server** starts at [http://localhost:8080](http://localhost:8080).
+
+3. **Health check**:
+   ```bash
+   curl http://localhost:8080/health
    ```
 
-2. **Use Maven** (more reliable)
-   ```bash
-   apt-get install maven
-   mvn clean test
-   ```
+## Alpha Vantage API Key (Real Data)
 
-3. **Verify implementation** (no build tool needed)
-   ```bash
-   bash verify.sh
-   ```
+To use live market data:
 
-See **[DIAGNOSTICS.md](DIAGNOSTICS.md)** for detailed troubleshooting.
+1. Get a free API key: [https://www.alphavantage.co/support/#api-key](https://www.alphavantage.co/support/#api-key)
+2. Set the environment variable:
+   - **Linux/macOS**: `export ALPHA_VANTAGE_API_KEY=your_key_here`
+   - **Windows (PowerShell)**: `$env:ALPHA_VANTAGE_API_KEY="your_key_here"`
+   - **Windows (CMD)**: `set ALPHA_VANTAGE_API_KEY=your_key_here`
+3. Run the server: `./gradlew run`
 
-## 📋 Test Coverage
+If `ALPHA_VANTAGE_API_KEY` is not set, the app logs a warning and uses **MockMarketDataService** (synthetic data) so you can develop and test without an API key.
 
-**8 Unit Tests:**
-1. ✅ Daily returns with increasing prices
-2. ✅ Daily returns with decreasing prices
-3. ✅ Error on insufficient data
-4. ✅ Annualized return formula
-5. ✅ Alpha calculation
-6. ✅ Beta calculation
-7. ✅ Volatility calculation
-8. ✅ Sharpe ratio calculation
+## Run Commands
 
-## 🎯 Next Phase: Phase 5 (Service Layer)
+| Command           | Description                    |
+|-------------------|--------------------------------|
+| `./gradlew run`   | Start server on port 8080      |
+| `./gradlew test`  | Run all unit tests             |
+| `./gradlew build` | Compile, test, and build JAR   |
 
-After Phase 4 completion, Phase 5 will implement:
-- ReturnsService
-- AlphaService
-- Input validation layer
-- Service integration tests
+## API Endpoints
 
-## 📝 License
+Base URL: `http://localhost:8080/api/v1`
 
-See [LICENSE](LICENSE) for details.
+All date params are optional; if omitted, **year-to-date (YTD)** is used. Date format: `YYYY-MM-DD`.
 
-## 🤝 Contributing
+### Health
 
-This project follows TDD (Test-Driven Development) methodology. Each phase includes comprehensive unit tests.
+```bash
+curl http://localhost:8080/health
+```
 
----
+### Returns (daily returns for a ticker)
 
-**Status**: ✅ Phase 4 Complete - Ready for Phase 5
+```bash
+# YTD
+curl "http://localhost:8080/api/v1/tickers/AAPL/returns"
+
+# With date range
+curl "http://localhost:8080/api/v1/tickers/AAPL/returns?from_date=2024-01-01&to_date=2024-06-30"
+```
+
+### Alpha (excess return vs benchmark)
+
+```bash
+curl "http://localhost:8080/api/v1/alpha?target=AAPL&benchmark=SPY"
+curl "http://localhost:8080/api/v1/alpha?target=AAPL&benchmark=SPY&from_date=2024-01-01&to_date=2024-06-30"
+```
+
+### Volatility
+
+```bash
+curl "http://localhost:8080/api/v1/tickers/AAPL/volatility"
+curl "http://localhost:8080/api/v1/tickers/AAPL/volatility?from_date=2024-01-01&to_date=2024-06-30"
+```
+
+### Sharpe Ratio
+
+```bash
+# Default risk-free rate 0.04
+curl "http://localhost:8080/api/v1/tickers/AAPL/sharpe"
+# Custom risk-free rate
+curl "http://localhost:8080/api/v1/tickers/AAPL/sharpe?risk_free_rate=0.02"
+```
+
+### Beta
+
+```bash
+curl "http://localhost:8080/api/v1/beta?target=AAPL&benchmark=SPY"
+```
+
+### Rolling Correlation
+
+```bash
+# Default 30-day window
+curl "http://localhost:8080/api/v1/correlation?ticker1=AAPL&ticker2=SPY"
+# Custom window
+curl "http://localhost:8080/api/v1/correlation?ticker1=AAPL&ticker2=SPY&window=60&from_date=2024-01-01&to_date=2024-06-30"
+```
+
+## Error Responses
+
+Errors return JSON with `error.code` and `error.message`:
+
+- **400** – Invalid request (e.g. invalid symbol, bad date format, date range &gt; 365 days, missing required params)
+- **404** – Symbol not found
+- **500** – Data retrieval or internal error
+
+Example:
+
+```json
+{"error":{"code":"INVALID_DATE_RANGE","message":"Date range cannot exceed 365 days (requested 400 days)","details":null}}
+```
+
+## Tests
+
+```bash
+./gradlew test
+```
+
+Reports: `build/reports/tests/test/index.html`  
+Coverage: `build/reports/jacoco/test/html/index.html`
+
+## Docker
+
+Build (optionally pass API key at build time):
+
+```bash
+docker build -t meiken .
+# With API key at build time (optional; prefer runtime -e for secrets):
+docker build --build-arg ALPHA_VANTAGE_API_KEY=your_key -t meiken .
+```
+
+Run (port 8080; pass API key at runtime for real data):
+
+```bash
+docker run -p 8080:8080 meiken
+# With real data:
+docker run -p 8080:8080 -e ALPHA_VANTAGE_API_KEY=your_key meiken
+```
+
+## Tech Stack
+
+- **Kotlin** 1.8, **Ktor** 2.3, **Gradle** (Kotlin DSL)
+- **kotlinx-datetime**, **kotlinx-serialization**, **kotlinx-coroutines**
+- **Ktor Client** (CIO) for Alpha Vantage
+- **Caffeine** for caching (when using real API)
+- **Logback** for logging
+- **JUnit 5** for tests
+
+## License
+
+See repository license.
