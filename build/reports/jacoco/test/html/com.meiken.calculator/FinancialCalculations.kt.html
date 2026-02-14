@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FinancialCalculations.kt</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">meiken</a> &gt; <a href="index.source.html" class="el_package">com.meiken.calculator</a> &gt; <span class="el_source">FinancialCalculations.kt</span></div><h1>FinancialCalculations.kt</h1><pre class="source lang-java linenums">package com.meiken.calculator
+
+import com.meiken.model.DailyPrice
+import com.meiken.model.DailyReturn
+import kotlin.math.pow
+import kotlin.math.sqrt
+
+object FinancialCalculations {
+    
+    fun calculateDailyReturns(prices: List&lt;DailyPrice&gt;): List&lt;DailyReturn&gt; {
+<span class="fc bfc" id="L11" title="All 4 branches covered.">        require(prices.size &gt;= 2) { &quot;Need at least 2 prices to calculate returns&quot; }</span>
+<span class="fc" id="L12">        return prices.sortedBy { it.date }.zipWithNext { prev, curr -&gt;</span>
+<span class="fc" id="L13">            DailyReturn(curr.date, (curr.close - prev.close) / prev.close)</span>
+        }
+    }
+    
+<span class="fc" id="L17">    fun annualizeReturn(avgDailyReturn: Double, tradingDays: Int = 252): Double {</span>
+<span class="fc" id="L18">        return (1 + avgDailyReturn).pow(tradingDays.toDouble()) - 1</span>
+    }
+    
+<span class="fc" id="L21">    fun calculateAlpha(targetReturns: List&lt;Double&gt;, benchmarkReturns: List&lt;Double&gt;, tradingDays: Int = 252): Double {</span>
+<span class="fc bfc" id="L22" title="All 4 branches covered.">        require(targetReturns.size == benchmarkReturns.size) { &quot;Must have same number of returns&quot; }</span>
+<span class="fc" id="L23">        val targetAnnualized = annualizeReturn(targetReturns.average(), tradingDays)</span>
+<span class="fc" id="L24">        val benchmarkAnnualized = annualizeReturn(benchmarkReturns.average(), tradingDays)</span>
+<span class="fc" id="L25">        return targetAnnualized - benchmarkAnnualized</span>
+    }
+    
+    fun calculateBeta(targetReturns: List&lt;Double&gt;, benchmarkReturns: List&lt;Double&gt;): Double {
+<span class="fc" id="L29">        val cov = StatisticalCalculations.covariance(targetReturns, benchmarkReturns)</span>
+<span class="fc" id="L30">        val benchmarkVar = StatisticalCalculations.variance(benchmarkReturns)</span>
+<span class="fc bfc" id="L31" title="All 6 branches covered.">        require(benchmarkVar != 0.0) { &quot;Benchmark variance cannot be zero&quot; }</span>
+<span class="fc" id="L32">        return cov / benchmarkVar</span>
+    }
+    
+<span class="fc" id="L35">    fun calculateVolatility(returns: List&lt;Double&gt;, tradingDays: Int = 252): Pair&lt;Double, Double&gt; {</span>
+<span class="fc" id="L36">        val daily = StatisticalCalculations.standardDeviation(returns)</span>
+<span class="fc" id="L37">        return Pair(daily, daily * sqrt(tradingDays.toDouble()))</span>
+    }
+    
+<span class="fc" id="L40">    fun calculateSharpe(returns: List&lt;Double&gt;, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double {</span>
+<span class="fc" id="L41">        val annualizedReturn = annualizeReturn(returns.average(), tradingDays)</span>
+<span class="fc" id="L42">        val (_, annualizedVol) = calculateVolatility(returns, tradingDays)</span>
+<span class="fc bfc" id="L43" title="All 6 branches covered.">        require(annualizedVol != 0.0) { &quot;Volatility cannot be zero&quot; }</span>
+<span class="fc" id="L44">        return (annualizedReturn - riskFreeRate) / annualizedVol</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

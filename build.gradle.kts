@@ -2,6 +2,7 @@ plugins {
     kotlin("jvm") version "1.8.20"
     kotlin("plugin.serialization") version "1.8.20"
     id("java")
+    jacoco
 }
 
 group = "com.meiken"
@@ -32,6 +33,26 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    classDirectories.setFrom(
+        classDirectories.files.map { dir ->
+            fileTree(dir) {
+                exclude(
+                    "**/model/*\$*.class",  // Kotlin serialization generated (Companion, $$serializer)
+                    "**/Comparisons*.class"  // Kotlin stdlib inlined
+                )
+            }
+        }
+    )
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
 }
 
 kotlin {

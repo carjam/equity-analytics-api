@@ -98,4 +98,83 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculateAlpha(targetReturns, benchmarkReturns)
         }
     }
+
+    @Test
+    fun `annualizeReturn with default trading days`() {
+        val annualized = FinancialCalculations.annualizeReturn(0.001)
+        assertEquals(0.2872, annualized, 0.001)
+    }
+
+    @Test
+    fun `calculateAlpha with default trading days`() {
+        val targetReturns = List(252) { 0.001 }
+        val benchmarkReturns = List(252) { 0.0008 }
+        val alpha = FinancialCalculations.calculateAlpha(targetReturns, benchmarkReturns)
+        assertEquals(0.0543, alpha, 0.01)
+    }
+
+    @Test
+    fun `calculateBeta with known values`() {
+        // Target and benchmark same -> beta = 1 (covariance = variance when same series)
+        val returns = listOf(0.01, 0.02, -0.01, 0.03, 0.0)
+        val beta = FinancialCalculations.calculateBeta(returns, returns)
+        assertEquals(1.0, beta, 0.0001)
+    }
+
+    @Test
+    fun `calculateBeta throws when benchmark variance is zero`() {
+        val constant = listOf(0.01, 0.01, 0.01)
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateBeta(listOf(0.01, 0.02, 0.03), constant)
+        }
+    }
+
+    @Test
+    fun `calculateBeta throws when series have different lengths`() {
+        val targetReturns = listOf(0.01, 0.02)
+        val benchmarkReturns = listOf(0.01, 0.02, 0.03)
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateBeta(targetReturns, benchmarkReturns)
+        }
+    }
+
+    @Test
+    fun `calculateVolatility returns daily and annualized`() {
+        val returns = listOf(0.01, -0.005, 0.02, 0.0, -0.01)
+        val (daily, annualized) = FinancialCalculations.calculateVolatility(returns, 252)
+        assert(daily >= 0)
+        assert(annualized >= 0)
+        assertEquals(annualized, daily * kotlin.math.sqrt(252.0), 0.0001)
+    }
+
+    @Test
+    fun `calculateVolatility with default trading days`() {
+        val returns = listOf(0.01, -0.005, 0.02)
+        val (daily, annualized) = FinancialCalculations.calculateVolatility(returns)
+        assert(daily >= 0)
+        assertEquals(annualized, daily * kotlin.math.sqrt(252.0), 0.0001)
+    }
+
+    @Test
+    fun `calculateSharpe with positive excess return`() {
+        val returns = List(252) { 0.001 }  // ~28.7% annualized
+        val sharpe = FinancialCalculations.calculateSharpe(returns, riskFreeRate = 0.04, tradingDays = 252)
+        assert(sharpe > 0)
+    }
+
+    @Test
+    fun `calculateSharpe with default risk free and trading days`() {
+        val returns = listOf(0.01, 0.02, -0.005, 0.015, 0.0)
+        val sharpe = FinancialCalculations.calculateSharpe(returns)
+        // Just ensure it doesn't throw when vol > 0
+        assert(!sharpe.isNaN())
+    }
+
+    @Test
+    fun `calculateSharpe throws when volatility is zero`() {
+        val constantReturns = listOf(0.01, 0.01, 0.01)
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateSharpe(constantReturns)
+        }
+    }
 }
