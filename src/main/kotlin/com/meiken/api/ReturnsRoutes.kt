@@ -14,6 +14,11 @@ import io.ktor.server.routing.route
 
 private val SYMBOL_REGEX = Regex("^[A-Z0-9]{1,5}$")
 
+/**
+ * GET /api/v1/tickers/{symbol}/returns
+ * Path: symbol (1-5 alphanumeric, uppercased). Query: from_date, to_date (optional, YYYY-MM-DD).
+ * If dates omitted, uses YTD (year-to-date). Returns 200 with JSON [Returns] or 400/404/500 via StatusPages.
+ */
 fun Route.returnsRoutes(returnsService: ReturnsService) {
     route("tickers") {
         route("{symbol}") {

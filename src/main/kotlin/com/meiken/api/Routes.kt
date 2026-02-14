@@ -17,9 +17,14 @@ import java.time.Instant
 
 private val healthJson = Json { encodeDefaults = true }
 
+/**
+ * Registers all HTTP routes: GET /health (JSON health check) and under api/v1 the returns,
+ * alpha, and analytics route trees. Services are injected so routes can call business logic.
+ */
 fun Application.configureRouting(returnsService: ReturnsService, alphaService: AlphaService, analyticsService: AnalyticsService) {
     routing {
         get("/health") {
+            // Health check: status, message, timestamp, and dependency list (extensible).
             val dependencies = listOf(
                 DependencyStatus(name = "app", status = "up", message = "Application is running")
                 // Add more as you wire them: DB, Alpha Vantage API, cache, etc.

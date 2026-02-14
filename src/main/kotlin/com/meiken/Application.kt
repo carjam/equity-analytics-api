@@ -25,6 +25,11 @@ import kotlinx.serialization.json.Json
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
+/**
+ * Registers Ktor StatusPages to map exceptions to HTTP error responses (JSON).
+ * InvalidDateRangeException/BadRequestException -> 400, SymbolNotFoundException -> 404,
+ * DataRetrievalException -> 500, ExternalServiceException -> 502, other Throwable -> 500.
+ */
 fun Application.installStatusPages() {
     install(StatusPages) {
         exception<InvalidDateRangeException> { call, cause ->
@@ -66,6 +71,10 @@ fun Application.installStatusPages() {
     }
 }
 
+/**
+ * Main application module: installs ContentNegotiation (JSON), StatusPages, CallLogging, CORS,
+ * then creates MockMarketDataService and all services (returns, alpha, analytics) and wires routing.
+ */
 fun Application.module() {
     install(ContentNegotiation) {
         json(Json {

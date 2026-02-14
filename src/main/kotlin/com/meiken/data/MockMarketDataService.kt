@@ -14,6 +14,7 @@ class MockMarketDataService(
     private val maxDailyChangeFraction: Double = 0.02
 ) : MarketDataService {
 
+    /** Generates synthetic prices: one per calendar day in range, random walk from [initialPrice] with daily change capped at ±[maxDailyChangeFraction]. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
         if (fromDate > toDate) return emptyList()
         val fromEpoch = fromDate.toEpochDays()

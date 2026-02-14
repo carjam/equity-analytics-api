@@ -21,6 +21,10 @@ import kotlinx.datetime.LocalDate
 private const val TRADING_DAYS = 252
 private const val DEFAULT_SOURCE = "market_data"
 
+/**
+ * Implements [AnalyticsService] using [MarketDataService] for prices and [FinancialCalculations] /
+ * [StatisticalCalculations] for metrics. Date range validated; two-symbol calls fetch in parallel and align by date.
+ */
 class AnalyticsServiceImpl(
     private val marketDataService: MarketDataService,
     private val maxDays: Int = 365
@@ -43,6 +47,7 @@ class AnalyticsServiceImpl(
             )
         }
 
+    /** Fetches target and benchmark in parallel, aligns returns by date, then beta = covariance / benchmark variance. */
     override suspend fun calculateBeta(target: String, benchmark: String, fromDate: LocalDate, toDate: LocalDate): BetaResponse =
         coroutineScope {
             validateDateRange(fromDate, toDate, maxDays)
@@ -67,6 +72,7 @@ class AnalyticsServiceImpl(
             )
         }
 
+    /** Annualized return and volatility from daily returns; Sharpe = (return - riskFreeRate) / annualizedVol. */
     override suspend fun calculateSharpe(symbol: String, fromDate: LocalDate, toDate: LocalDate, riskFreeRate: Double): SharpeResponse =
         coroutineScope {
             validateDateRange(fromDate, toDate, maxDays)
@@ -85,6 +91,7 @@ class AnalyticsServiceImpl(
             )
         }
 
+    /** Aligns both series by date, then for each sliding window of [window] days computes Pearson correlation; windows with zero variance are skipped. */
     override suspend fun calculateCorrelation(
         ticker1: String,
         ticker2: String,
@@ -123,6 +130,7 @@ class AnalyticsServiceImpl(
         )
     }
 
+    /** Returns pairs of returns for dates that appear in both series (same logic as AlphaServiceImpl). */
     private fun alignReturnsByDate(
         returns1: List<DailyReturn>,
         returns2: List<DailyReturn>

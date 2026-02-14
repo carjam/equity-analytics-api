@@ -12,6 +12,10 @@ import kotlinx.datetime.LocalDate
 
 private const val TRADING_DAYS = 252
 
+/**
+ * Fetches target and benchmark prices in parallel, aligns returns by date (same trading days),
+ * then computes alpha as annualized target return minus annualized benchmark return.
+ */
 class AlphaServiceImpl(
     private val marketDataService: MarketDataService,
     private val maxDays: Int = 365
@@ -58,6 +62,7 @@ class AlphaServiceImpl(
         )
     }
 
+    /** Pairs target and benchmark returns by date; only dates present in both series are included. */
     private fun alignReturnsByDate(
         targetReturns: List<DailyReturn>,
         benchmarkReturns: List<DailyReturn>

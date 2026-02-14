@@ -30,6 +30,7 @@ class AlphaVantageService(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Calls Alpha Vantage TIME_SERIES_DAILY_ADJUSTED, filters to [fromDate, toDate], returns adjusted close. Throws [SymbolNotFoundException] on error message, [DataRetrievalException] on network/parse/rate limit. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
         val response = try {
             client.get(BASE_URL) {
@@ -75,6 +76,7 @@ class AlphaVantageService(
             .sortedBy { it.date.toEpochDays() }
     }
 
+    /** Parses YYYY-MM-DD to [LocalDate]; returns null on parse failure. */
     private fun parseDate(s: String): LocalDate? = try {
         LocalDate.parse(s)
     } catch (_: Exception) {

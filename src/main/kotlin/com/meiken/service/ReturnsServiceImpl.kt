@@ -7,6 +7,10 @@ import com.meiken.model.ReturnsMetadata
 import com.meiken.util.validateDateRange
 import kotlinx.datetime.LocalDate
 
+/**
+ * Default implementation: validates date range, fetches prices from [MarketDataService],
+ * computes daily returns via [FinancialCalculations.calculateDailyReturns], returns [Returns] with metadata.
+ */
 class ReturnsServiceImpl(
     private val marketDataService: MarketDataService,
     private val maxDays: Int = 365,

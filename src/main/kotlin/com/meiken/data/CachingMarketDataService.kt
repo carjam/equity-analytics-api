@@ -19,6 +19,7 @@ class CachingMarketDataService(
         .maximumSize(1000)
         .build<String, List<DailyPrice>>()
 
+    /** Returns cached result if present; otherwise delegates to [delegate], caches, and returns. Key = symbol:from:to. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
         val key = "market_data:$symbol:$fromDate:$toDate"
         return cache.getIfPresent(key) ?: run {
