@@ -1,5 +1,6 @@
 package com.meiken.service
 
+import com.meiken.cache.SymbolAnalyticsCacheService
 import com.meiken.data.MockMarketDataService
 import com.meiken.error.InvalidDateRangeException
 import kotlinx.datetime.LocalDate
@@ -12,7 +13,8 @@ import kotlin.test.assertTrue
 class AlphaServiceTest {
 
     private val mockMarketData = MockMarketDataService(kotlin.random.Random(2), 100.0, 0.02)
-    private val alphaService = AlphaServiceImpl(mockMarketData, maxDays = 365)
+    private val analyticsCache = SymbolAnalyticsCacheService()
+    private val alphaService = AlphaServiceImpl(analyticsCache, mockMarketData, maxDays = 365)
 
     @Test
     fun `calculateAlpha returns Alpha with metadata`() = runBlocking {
@@ -39,7 +41,7 @@ class AlphaServiceTest {
 
     @Test
     fun `calculateAlpha throws InvalidDateRangeException when range exceeds maxDays`() = runBlocking {
-        val serviceWithMax2 = AlphaServiceImpl(mockMarketData, maxDays = 2)
+        val serviceWithMax2 = AlphaServiceImpl(analyticsCache, mockMarketData, maxDays = 2)
         val from = LocalDate(2024, 1, 1)
         val to = LocalDate(2024, 1, 10)
         assertThrows<InvalidDateRangeException> {

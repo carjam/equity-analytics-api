@@ -17,12 +17,12 @@ private const val DEFAULT_RISK_FREE_RATE = 0.04
 private const val DEFAULT_CORRELATION_WINDOW = 30
 
 /**
- * Analytics routes under /api/v1:
+ * Analytics routes under /api/v1. All metrics use close-of-day prices only (close-to-close daily returns).
  * - GET tickers/{symbol}/volatility (optional from_date, to_date; default YTD)
  * - GET tickers/{symbol}/sharpe (optional risk_free_rate=0.04, from_date, to_date)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET correlation?ticker1=&ticker2= (optional from_date, to_date, window=30)
- * All symbols/tickers validated 1-5 alphanumeric. Dates YYYY-MM-DD; errors -> 400/404/500.
+ * Symbols 1-5 alphanumeric; dates YYYY-MM-DD; errors -> 400/404/500.
  */
 fun Route.analyticsRoutes(analyticsService: AnalyticsService) {
     route("tickers") {

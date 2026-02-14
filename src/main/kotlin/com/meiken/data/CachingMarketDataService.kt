@@ -7,8 +7,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Wraps a [MarketDataService] (e.g. [AlphaVantageService]) with Caffeine cache.
- * Cache key: "market_data:${symbol}:${fromDate}:${toDate}"
- * TTL: 1 hour, max size: 1000 entries.
+ * Caches close-of-day price lists; key: "market_data:${symbol}:${fromDate}:${toDate}"; TTL 1 hour, max 1000 entries.
  */
 class CachingMarketDataService(
     private val delegate: MarketDataService
@@ -19,7 +18,7 @@ class CachingMarketDataService(
         .maximumSize(1000)
         .build<String, List<DailyPrice>>()
 
-    /** Returns cached result if present; otherwise delegates to [delegate], caches, and returns. Key = symbol:from:to. */
+    /** Returns cached close-of-day price list if present; otherwise delegates to [delegate], caches, and returns. Key = symbol:from:to. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
         val key = "market_data:$symbol:$fromDate:$toDate"
         return cache.getIfPresent(key) ?: run {

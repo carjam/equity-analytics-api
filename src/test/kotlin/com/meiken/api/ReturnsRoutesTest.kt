@@ -1,5 +1,6 @@
 package com.meiken.api
 
+import com.meiken.cache.SymbolAnalyticsCacheService
 import com.meiken.data.MarketDataService
 import com.meiken.module
 import com.meiken.data.MockMarketDataService
@@ -102,9 +103,10 @@ class ReturnsRoutesTest {
     fun `symbol not found returns 404`() = testApplication {
         environment { config = MapApplicationConfig() }
         val marketData = ThrowingMarketDataService(throwForSymbols = setOf("NONE"))
-        val returnsService = ReturnsServiceImpl(marketData)
-        val alphaService = AlphaServiceImpl(marketData)
-        val analyticsService = AnalyticsServiceImpl(marketData)
+        val analyticsCache = SymbolAnalyticsCacheService()
+        val returnsService = ReturnsServiceImpl(analyticsCache, marketData)
+        val alphaService = AlphaServiceImpl(analyticsCache, marketData)
+        val analyticsService = AnalyticsServiceImpl(analyticsCache, marketData)
         application {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true; encodeDefaults = true })

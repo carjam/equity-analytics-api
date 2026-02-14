@@ -5,6 +5,6 @@ import kotlinx.datetime.LocalDate
 
 /** Service for computing daily returns over a date range for a given symbol. */
 interface ReturnsService {
-    /** Fetches historical prices and returns daily returns (percentage change day-over-day). */
+    /** Fetches close-of-day prices and returns daily close-to-close returns (one per day; percentage change day-over-day). */
     suspend fun calculateReturns(symbol: String, fromDate: LocalDate, toDate: LocalDate): Returns
 }

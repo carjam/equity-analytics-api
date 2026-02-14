@@ -16,8 +16,8 @@ private val SYMBOL_REGEX = Regex("^[A-Z0-9]{1,5}$")
 
 /**
  * GET /api/v1/tickers/{symbol}/returns
- * Path: symbol (1-5 alphanumeric, uppercased). Query: from_date, to_date (optional, YYYY-MM-DD).
- * If dates omitted, uses YTD (year-to-date). Returns 200 with JSON [Returns] or 400/404/500 via StatusPages.
+ * Returns daily close-to-close returns (from close-of-day prices only). Path: symbol (1-5 alphanumeric, uppercased).
+ * Query: from_date, to_date (optional, YYYY-MM-DD). If dates omitted, uses YTD. Returns 200 with JSON [Returns] or 400/404/500.
  */
 fun Route.returnsRoutes(returnsService: ReturnsService) {
     route("tickers") {

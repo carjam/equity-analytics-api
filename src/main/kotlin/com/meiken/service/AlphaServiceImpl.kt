@@ -1,5 +1,7 @@
 package com.meiken.service
 
+import com.meiken.cache.SymbolAnalytics
+import com.meiken.cache.SymbolAnalyticsCacheService
 import com.meiken.calculator.FinancialCalculations
 import com.meiken.data.MarketDataService
 import com.meiken.model.Alpha
@@ -13,14 +15,17 @@ import kotlinx.datetime.LocalDate
 private const val TRADING_DAYS = 252
 
 /**
- * Fetches target and benchmark prices in parallel, aligns returns by date (same trading days),
- * then computes alpha as annualized target return minus annualized benchmark return.
+ * Uses [SymbolAnalyticsCacheService]: fetches cached [SymbolAnalytics] for target and benchmark in parallel
+ * (each symbol/date-range at most one API call; cache hits are instant). Aligns returns by date and computes
+ * alpha as annualized target return minus annualized benchmark return. No redundant fetches or calculations.
  */
 class AlphaServiceImpl(
+    private val analyticsCache: SymbolAnalyticsCacheService,
     private val marketDataService: MarketDataService,
     private val maxDays: Int = 365
 ) : AlphaService {
 
+    /** Computes alpha from cached close-of-day returns for target and benchmark (close-to-close daily returns). */
     override suspend fun calculateAlpha(
         target: String,
         benchmark: String,
@@ -29,16 +34,20 @@ class AlphaServiceImpl(
     ): Alpha = coroutineScope {
         validateDateRange(fromDate, toDate, maxDays)
 
-        val targetPricesDeferred = async { marketDataService.getHistoricalPrices(target, fromDate, toDate) }
-        val benchmarkPricesDeferred = async { marketDataService.getHistoricalPrices(benchmark, fromDate, toDate) }
+        val targetAnalyticsDeferred = async {
+            analyticsCache.getOrCompute(target, fromDate, toDate, marketDataService)
+        }
+        val benchmarkAnalyticsDeferred = async {
+            analyticsCache.getOrCompute(benchmark, fromDate, toDate, marketDataService)
+        }
 
-        val targetPrices = targetPricesDeferred.await()
-        val benchmarkPrices = benchmarkPricesDeferred.await()
+        val targetAnalytics = targetAnalyticsDeferred.await()
+        val benchmarkAnalytics = benchmarkAnalyticsDeferred.await()
 
-        val targetReturns = FinancialCalculations.calculateDailyReturns(targetPrices)
-        val benchmarkReturns = FinancialCalculations.calculateDailyReturns(benchmarkPrices)
-
-        val (alignedTarget, alignedBenchmark) = alignReturnsByDate(targetReturns, benchmarkReturns)
+        val (alignedTarget, alignedBenchmark) = alignReturnsByDate(
+            targetAnalytics.dailyReturns,
+            benchmarkAnalytics.dailyReturns
+        )
         require(alignedTarget.isNotEmpty()) { "Insufficient overlapping data for alpha calculation" }
 
         val targetValues = alignedTarget.map { it.returnValue }

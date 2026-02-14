@@ -66,7 +66,7 @@ tasks.jacocoTestReport {
         classDirectories.files.map { dir ->
             fileTree(dir) {
                 exclude(
-                    "**/model/*\$*.class",  // Kotlin serialization generated (Companion, $$serializer)
+                    "**/model/**",  // Data classes / DTOs (getters, serialization)
                     "**/Comparisons*.class",  // Kotlin stdlib inlined
                     "**/error/*.class",  // Exception classes (covered indirectly via handlers)
                     "**/ApplicationKt*.class",  // Application wiring (StatusPages, plugins)

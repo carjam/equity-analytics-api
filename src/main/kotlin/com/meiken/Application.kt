@@ -1,6 +1,7 @@
 package com.meiken
 
 import com.meiken.api.configureRouting
+import com.meiken.cache.SymbolAnalyticsCacheService
 import com.meiken.data.AlphaVantageService
 import com.meiken.data.MockMarketDataService
 import com.meiken.data.MarketDataService
@@ -82,6 +83,9 @@ fun Application.installStatusPages() {
 /**
  * Main application module: installs ContentNegotiation (JSON), StatusPages, CallLogging, CORS,
  * then creates MarketDataService (Alpha Vantage if ALPHA_VANTAGE_API_KEY set, else Mock) and wires routing.
+ * A single [SymbolAnalyticsCacheService] is shared by Returns, Alpha, and Analytics so that each
+ * symbol/date-range is fetched and computed once; all endpoints reuse cached analytics (one API call
+ * per symbol/range, no redundant calculations, better rate-limit behavior).
  */
 fun Application.module() {
     install(ContentNegotiation) {
@@ -97,21 +101,30 @@ fun Application.module() {
         anyHost()
     }
 
-    val marketDataService = createMarketDataService()
-    val returnsService = ReturnsServiceImpl(marketDataService)
-    val alphaService = AlphaServiceImpl(marketDataService)
-    val analyticsService = AnalyticsServiceImpl(marketDataService)
+    val environmentName = environment.config.propertyOrNull("meiken.environment")?.getString() ?: "development"
+    val marketDataService = createMarketDataService(environmentName)
+    val analyticsCache = SymbolAnalyticsCacheService()
+    val returnsService = ReturnsServiceImpl(analyticsCache, marketDataService)
+    val alphaService = AlphaServiceImpl(analyticsCache, marketDataService)
+    val analyticsService = AnalyticsServiceImpl(analyticsCache, marketDataService)
     configureRouting(returnsService, alphaService, analyticsService)
 }
 
 /**
- * Uses Alpha Vantage when ALPHA_VANTAGE_API_KEY is set; otherwise logs a warning and uses MockMarketDataService for development.
+ * Creates [MarketDataService]: Alpha Vantage when ALPHA_VANTAGE_API_KEY is set, else Mock.
+ * [environmentName]: "production" -> outputsize=full, no limiter messages; non-production -> outputsize=compact, limiter messages (upgrade hint when data missing). Driven by meiken.environment in application.conf or MEIKEN_ENVIRONMENT env.
  */
-private fun createMarketDataService(): MarketDataService {
+private fun createMarketDataService(environmentName: String): MarketDataService {
     val apiKey = System.getenv("ALPHA_VANTAGE_API_KEY")
+    val isProduction = environmentName.equals("production", ignoreCase = true)
     return if (!apiKey.isNullOrBlank()) {
         val client = HttpClient(CIO) { }
-        AlphaVantageService(client, apiKey)
+        AlphaVantageService(
+            client = client,
+            apiKey = apiKey,
+            outputSize = if (isProduction) "full" else "compact",
+            useLimiterMessages = !isProduction
+        )
     } else {
         LoggerFactory.getLogger("com.meiken.Application")
             .warn("ALPHA_VANTAGE_API_KEY not set; using MockMarketDataService for development")

@@ -16,8 +16,8 @@ private val SYMBOL_REGEX = Regex("^[A-Z0-9]{1,5}$")
 
 /**
  * GET /api/v1/alpha
- * Query: target, benchmark (required, 1-5 alphanumeric). from_date, to_date (optional; default YTD).
- * Returns 200 with JSON [Alpha] (annualized excess return) or 400/404/500 via StatusPages.
+ * Alpha (excess return vs benchmark) from close-of-day returns. Query: target, benchmark (required). from_date, to_date (optional; default YTD).
+ * Returns 200 with JSON [Alpha] or 400/404/500.
  */
 fun Route.alphaRoutes(alphaService: AlphaService) {
     route("alpha") {

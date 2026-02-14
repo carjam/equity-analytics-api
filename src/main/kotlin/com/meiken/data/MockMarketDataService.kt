@@ -5,8 +5,8 @@ import kotlinx.datetime.LocalDate
 import kotlin.random.Random
 
 /**
- * Implements [MarketDataService] with mock data: starting price $100, random walk +/-2% per day.
- * Used for testing.
+ * Implements [MarketDataService] with mock close-of-day data: one closing price per calendar day,
+ * starting price $100, random walk +/-2% per day. Used for testing.
  */
 class MockMarketDataService(
     private val random: Random = Random.Default,
@@ -14,7 +14,7 @@ class MockMarketDataService(
     private val maxDailyChangeFraction: Double = 0.02
 ) : MarketDataService {
 
-    /** Generates synthetic prices: one per calendar day in range, random walk from [initialPrice] with daily change capped at ±[maxDailyChangeFraction]. */
+    /** Generates synthetic close-of-day prices: one closing price per calendar day in range, random walk from [initialPrice] with daily change ±[maxDailyChangeFraction]. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
         if (fromDate > toDate) return emptyList()
         val fromEpoch = fromDate.toEpochDays()

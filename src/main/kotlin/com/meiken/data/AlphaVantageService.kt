@@ -28,25 +28,30 @@ private const val RAW_RESPONSE_LOG_LIMIT = 500
 
 /**
  * Implements [MarketDataService] using Alpha Vantage TIME_SERIES_DAILY API.
- * Parses OHLCV from "Time Series (Daily)" and uses "4. close" for returns.
+ * [outputSize]: "compact" = last ~100 trading days (~4 months, free tier); "full" = full history (premium).
+ * [useLimiterMessages]: when true (non-prod), no/insufficient data throws a message suggesting upgrade; when false (prod), generic message.
+ * Behavior is config-driven via [outputSize] and [useLimiterMessages]; see application.conf and README (meiken.environment).
+ * Returns close-of-day prices only; one bar per calendar day per ticker; uses "4. close" (daily close).
  * Throws [SymbolNotFoundException] for invalid symbol, [DataRetrievalException] for other errors.
  */
 class AlphaVantageService(
     private val client: HttpClient,
-    private val apiKey: String
+    private val apiKey: String,
+    private val outputSize: String = "compact",
+    private val useLimiterMessages: Boolean = true
 ) : MarketDataService {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val log = LoggerFactory.getLogger(AlphaVantageService::class.java)
 
-    /** Calls Alpha Vantage TIME_SERIES_DAILY, filters to [fromDate, toDate], returns daily OHLCV. Throws [SymbolNotFoundException] on error message, [DataRetrievalException] on network/parse/rate limit. */
+    /** Fetches close-of-day prices only: one bar per calendar day from TIME_SERIES_DAILY; uses "4. close". outputSize (compact/full) and limiter messages are config-driven. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
         val response = try {
             client.get(BASE_URL) {
                 parameter("function", "TIME_SERIES_DAILY")
                 parameter("symbol", symbol)
                 parameter("apikey", apiKey)
-                parameter("outputsize", "full")
+                parameter("outputsize", outputSize)
             }.body<String>()
         } catch (e: Exception) {
             throw DataRetrievalException("Failed to fetch data for $symbol: ${e.message}", e)
@@ -85,7 +90,7 @@ class AlphaVantageService(
         val fromEpoch = fromDate.toEpochDays()
         val toEpoch = toDate.toEpochDays()
 
-        return timeSeries.entries
+        val prices = timeSeries.entries
             .mapNotNull { (dateStr, dayObj) ->
                 val date = parseDate(dateStr) ?: return@mapNotNull null
                 if (date.toEpochDays() !in fromEpoch..toEpoch) return@mapNotNull null
@@ -99,6 +104,24 @@ class AlphaVantageService(
                 DailyPrice(date = date, close = close, open = open, high = high, low = low, volume = volume)
             }
             .sortedBy { it.date.toEpochDays() }
+
+        if (prices.isEmpty()) {
+            throw DataRetrievalException(
+                if (useLimiterMessages)
+                    "No data in the requested date range for $symbol. The free-tier API (outputsize=compact) returns only the last ~100 trading days (~4 months). For longer history, upgrade to a premium API key that supports outputsize=full."
+                else
+                    "No data in the requested date range for $symbol. Check the symbol and date range."
+            )
+        }
+        if (prices.size < 2) {
+            throw DataRetrievalException(
+                if (useLimiterMessages)
+                    "Insufficient data for $symbol in the requested range (need at least 2 days). Free tier returns the last ~100 trading days; for a wider range, upgrade to a premium API key."
+                else
+                    "Insufficient data for $symbol in the requested range (need at least 2 days)."
+            )
+        }
+        return prices
     }
 
     /** Parses YYYY-MM-DD to [LocalDate]; returns null on parse failure. */
