@@ -1,6 +1,7 @@
 package com.meiken.api
 
 import com.meiken.service.AlphaService
+import com.meiken.service.AnalyticsService
 import com.meiken.service.ReturnsService
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -16,7 +17,7 @@ import java.time.Instant
 
 private val healthJson = Json { encodeDefaults = true }
 
-fun Application.configureRouting(returnsService: ReturnsService, alphaService: AlphaService) {
+fun Application.configureRouting(returnsService: ReturnsService, alphaService: AlphaService, analyticsService: AnalyticsService) {
     routing {
         get("/health") {
             val dependencies = listOf(
@@ -35,6 +36,7 @@ fun Application.configureRouting(returnsService: ReturnsService, alphaService: A
         route("api/v1") {
             returnsRoutes(returnsService)
             alphaRoutes(alphaService)
+            analyticsRoutes(analyticsService)
         }
     }
 }

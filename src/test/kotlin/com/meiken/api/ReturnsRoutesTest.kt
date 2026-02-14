@@ -5,8 +5,9 @@ import com.meiken.module
 import com.meiken.data.MockMarketDataService
 import com.meiken.error.SymbolNotFoundException
 import com.meiken.installStatusPages
-import com.meiken.service.ReturnsServiceImpl
 import com.meiken.service.AlphaServiceImpl
+import com.meiken.service.AnalyticsServiceImpl
+import com.meiken.service.ReturnsServiceImpl
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -103,6 +104,7 @@ class ReturnsRoutesTest {
         val marketData = ThrowingMarketDataService(throwForSymbols = setOf("NONE"))
         val returnsService = ReturnsServiceImpl(marketData)
         val alphaService = AlphaServiceImpl(marketData)
+        val analyticsService = AnalyticsServiceImpl(marketData)
         application {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true; encodeDefaults = true })
@@ -112,6 +114,7 @@ class ReturnsRoutesTest {
                 route("api/v1") {
                     returnsRoutes(returnsService)
                     alphaRoutes(alphaService)
+                    analyticsRoutes(analyticsService)
                 }
             }
         }

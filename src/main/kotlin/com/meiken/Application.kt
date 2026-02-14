@@ -10,6 +10,7 @@ import com.meiken.error.ExternalServiceException
 import com.meiken.error.InvalidDateRangeException
 import com.meiken.error.SymbolNotFoundException
 import com.meiken.service.AlphaServiceImpl
+import com.meiken.service.AnalyticsServiceImpl
 import com.meiken.service.ReturnsServiceImpl
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -82,5 +83,6 @@ fun Application.module() {
     val marketDataService = MockMarketDataService()
     val returnsService = ReturnsServiceImpl(marketDataService)
     val alphaService = AlphaServiceImpl(marketDataService)
-    configureRouting(returnsService, alphaService)
+    val analyticsService = AnalyticsServiceImpl(marketDataService)
+    configureRouting(returnsService, alphaService, analyticsService)
 }
