@@ -13,17 +13,17 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.LocalDate
 
-private const val TRADING_DAYS = 252
-
 /**
  * Uses [SymbolAnalyticsCacheService]: fetches cached [SymbolAnalytics] for target and benchmark in parallel
  * (each symbol/date-range at most one API call; cache hits are instant). Aligns returns by date and computes
- * alpha as annualized target return minus annualized benchmark return. No redundant fetches or calculations.
+ * alpha as annualized target return minus annualized benchmark return.
+ * [tradingDaysPerYear] from config (meiken.calculations.tradingDaysPerYear) for annualization.
  */
 class AlphaServiceImpl(
     private val analyticsCache: SymbolAnalyticsCacheService,
     private val marketDataService: MarketDataService,
-    private val maxDays: Int = 365
+    private val maxDays: Int = 365,
+    private val tradingDaysPerYear: Int = 252
 ) : AlphaService {
 
     /** Computes alpha from cached close-of-day returns for target and benchmark (close-to-close daily returns). */
@@ -57,10 +57,15 @@ class AlphaServiceImpl(
 
         val targetValues = alignedTarget.map { it.returnValue }
         val benchmarkValues = alignedBenchmark.map { it.returnValue }
-        val alphaValue = FinancialCalculations.calculateAlpha(targetValues, benchmarkValues, TRADING_DAYS)
-        val targetAnnualized = FinancialCalculations.annualizeReturn(targetValues.average(), TRADING_DAYS)
-        val benchmarkAnnualized = FinancialCalculations.annualizeReturn(benchmarkValues.average(), TRADING_DAYS)
+        val alphaValue = FinancialCalculations.calculateAlpha(targetValues, benchmarkValues, tradingDaysPerYear)
+        val targetAnnualized = FinancialCalculations.annualizeReturn(targetValues.average(), tradingDaysPerYear)
+        val benchmarkAnnualized = FinancialCalculations.annualizeReturn(benchmarkValues.average(), tradingDaysPerYear)
 
+        val worstQuality = listOf(targetAnalytics.dataQuality, benchmarkAnalytics.dataQuality)
+            .minByOrNull { when (it) { "POOR" -> 0; "ACCEPTABLE" -> 1; else -> 2 } } ?: "GOOD"
+        val combinedOutliers = targetAnalytics.outlierCount + benchmarkAnalytics.outlierCount
+        val combinedMissing = targetAnalytics.missingDays + benchmarkAnalytics.missingDays
+        val combinedWarnings = (targetAnalytics.warnings + benchmarkAnalytics.warnings).distinct()
         Alpha(
             target = target,
             benchmark = benchmark,
@@ -71,7 +76,11 @@ class AlphaServiceImpl(
                 dataPoints = alignedTarget.size,
                 calculationMethod = "annualized_excess_return",
                 targetAnnualizedReturn = targetAnnualized,
-                benchmarkAnnualizedReturn = benchmarkAnnualized
+                benchmarkAnnualizedReturn = benchmarkAnnualized,
+                dataQuality = worstQuality,
+                outlierCount = combinedOutliers,
+                missingDays = combinedMissing,
+                warnings = combinedWarnings.ifEmpty { null }
             )
         )
     }

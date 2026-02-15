@@ -1,8 +1,11 @@
 package com.meiken.api
 
+import com.meiken.config.ApiConfig
+import com.meiken.config.DefaultsConfig
 import com.meiken.cache.SymbolAnalyticsCacheService
 import com.meiken.data.MarketDataService
 import com.meiken.security.ApiKeyManager
+import com.meiken.security.SecurityConfig
 import com.meiken.security.apiKeyPrincipal
 import com.meiken.security.validateApiKey
 import com.meiken.service.AlphaService
@@ -41,8 +44,13 @@ fun Application.configureRouting(
     apiKeysEnabled: Boolean = false,
     apiKeyManager: ApiKeyManager? = null,
     circuitBreaker: io.github.resilience4j.circuitbreaker.CircuitBreaker? = null,
-    isShuttingDown: () -> Boolean = { false }
+    isShuttingDown: () -> Boolean = { false },
+    defaultsConfig: DefaultsConfig? = null,
+    securityConfig: SecurityConfig? = null,
+    apiConfig: ApiConfig? = null
 ) {
+    val maxStringLength = securityConfig?.maxStringLength ?: 100
+    val cacheMaxAge = apiConfig?.cacheControlMaxAgeSeconds ?: 300
     routing {
         get("/health") {
             call.response.headers.append("Cache-Control", "no-cache")
@@ -65,7 +73,7 @@ fun Application.configureRouting(
         }
         route("api/v1") {
             intercept(ApplicationCallPipeline.Call) {
-                call.response.headers.append("Cache-Control", "public, max-age=300")
+                call.response.headers.append("Cache-Control", "public, max-age=$cacheMaxAge")
                 proceed()
             }
             if (apiKeysEnabled && apiKeyManager != null) {
@@ -78,9 +86,9 @@ fun Application.configureRouting(
                 }
             }
             rateLimit(RateLimitName("api")) {
-                returnsRoutes(returnsService)
-                alphaRoutes(alphaService)
-                analyticsRoutes(analyticsService)
+                returnsRoutes(returnsService, maxStringLength)
+                alphaRoutes(alphaService, maxStringLength)
+                analyticsRoutes(analyticsService, defaultsConfig, maxStringLength)
             }
         }
     }

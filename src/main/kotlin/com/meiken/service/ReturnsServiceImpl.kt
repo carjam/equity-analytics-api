@@ -30,7 +30,11 @@ class ReturnsServiceImpl(
             dailyReturns = analytics.dailyReturns,
             metadata = ReturnsMetadata(
                 dataPoints = analytics.dailyReturns.size,
-                source = sourceName
+                source = sourceName,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = analytics.warnings.ifEmpty { null }
             )
         )
     }

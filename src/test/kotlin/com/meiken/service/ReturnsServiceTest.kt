@@ -1,6 +1,7 @@
 package com.meiken.service
 
 import com.meiken.cache.SymbolAnalyticsCacheService
+import com.meiken.config.TestConfig
 import com.meiken.data.MockMarketDataService
 import com.meiken.error.InvalidDateRangeException
 import kotlinx.datetime.LocalDate
@@ -13,7 +14,11 @@ import kotlin.test.assertTrue
 class ReturnsServiceTest {
 
     private val mockMarketData = MockMarketDataService(kotlin.random.Random(1), 100.0, 0.02)
-    private val analyticsCache = SymbolAnalyticsCacheService()
+    private val analyticsCache = SymbolAnalyticsCacheService(
+        TestConfig.cacheConfig,
+        TestConfig.calculationsConfig,
+        TestConfig.dataQualityConfig
+    )
     private val returnsService = ReturnsServiceImpl(analyticsCache, mockMarketData, maxDays = 365, sourceName = "mock")
 
     @Test

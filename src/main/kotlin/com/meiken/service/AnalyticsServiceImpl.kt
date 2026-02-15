@@ -19,7 +19,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.LocalDate
 
-private const val TRADING_DAYS = 252
 private const val DEFAULT_SOURCE = "market_data"
 
 /**
@@ -51,7 +50,11 @@ class AnalyticsServiceImpl(
                 ),
                 metadata = VolatilityMetadata(
                     dataPoints = analytics.dailyReturns.size,
-                    source = DEFAULT_SOURCE
+                    source = DEFAULT_SOURCE,
+                    dataQuality = analytics.dataQuality,
+                    outlierCount = analytics.outlierCount,
+                    missingDays = analytics.missingDays,
+                    warnings = analytics.warnings.ifEmpty { null }
                 )
             )
         }
@@ -80,13 +83,22 @@ class AnalyticsServiceImpl(
         val targetValues = alignedTarget.map { it.returnValue }
         val benchmarkValues = alignedBenchmark.map { it.returnValue }
         val beta = FinancialCalculations.calculateBeta(targetValues, benchmarkValues)
+        val worstQuality = listOf(targetAnalytics.dataQuality, benchmarkAnalytics.dataQuality)
+            .minByOrNull { when (it) { "POOR" -> 0; "ACCEPTABLE" -> 1; else -> 2 } } ?: "GOOD"
         BetaResponse(
             target = target,
             benchmark = benchmark,
             fromDate = fromDate,
             toDate = toDate,
             beta = beta,
-            metadata = BetaMetadata(dataPoints = alignedTarget.size, source = DEFAULT_SOURCE)
+            metadata = BetaMetadata(
+                dataPoints = alignedTarget.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = worstQuality,
+                outlierCount = targetAnalytics.outlierCount + benchmarkAnalytics.outlierCount,
+                missingDays = targetAnalytics.missingDays + benchmarkAnalytics.missingDays,
+                warnings = (targetAnalytics.warnings + benchmarkAnalytics.warnings).distinct().ifEmpty { null }
+            )
         )
     }
 
@@ -110,7 +122,11 @@ class AnalyticsServiceImpl(
             riskFreeRate = riskFreeRate,
             metadata = SharpeMetadata(
                 dataPoints = analytics.dailyReturns.size,
-                source = DEFAULT_SOURCE
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = analytics.warnings.ifEmpty { null }
             )
         )
     }

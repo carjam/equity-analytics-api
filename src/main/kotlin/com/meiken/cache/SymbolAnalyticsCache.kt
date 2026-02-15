@@ -1,24 +1,32 @@
 package com.meiken.cache
 
 import com.meiken.calculator.FinancialCalculations
+import com.meiken.config.CacheConfig
+import com.meiken.config.CalculationsConfig
+import com.meiken.config.DataQualityConfig
 import com.meiken.data.MarketDataService
 import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
 import com.meiken.observability.Metrics
+import com.meiken.util.MarketCalendar
+import com.meiken.validator.DataValidator
 import com.github.benmanes.caffeine.cache.Caffeine
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-private const val TRADING_DAYS = 252
-
 /**
  * Cached analytics for a symbol over a date range.
  * All values are derived from close-of-day prices only (one price per calendar day per ticker).
  * Contains daily close prices, close-to-close daily returns, volatility (daily and annualized), and return metrics.
+ * Data quality fields: [dataQuality] (GOOD/ACCEPTABLE/POOR), [outlierCount], [missingDays], [dataFreshness], [gapDays], [warnings].
  * Computed once when the cache is populated; Returns, Alpha, and Analytics reuse this data (one API call per symbol/range).
  */
 data class SymbolAnalytics(
@@ -30,7 +38,21 @@ data class SymbolAnalytics(
     val dailyVolatility: Double,
     val annualizedVolatility: Double,
     val averageDailyReturn: Double,
-    val annualizedReturn: Double
+    val annualizedReturn: Double,
+    /** When this analytics entry was computed/fetched; used for staleness and [dataFreshness]. */
+    val fetchedAt: Instant = Clock.System.now(),
+    /** Overall data quality: GOOD, ACCEPTABLE, or POOR (from missing days, gaps, outliers). */
+    val dataQuality: String = "GOOD",
+    /** Number of return outliers (3-sigma); included in calculations, not removed. */
+    val outlierCount: Int = 0,
+    /** Expected trading days in range minus actual price count (from [MarketCalendar.getTradingDays]). */
+    val missingDays: Int = 0,
+    /** Human-readable freshness: "realtime", "1 hour old", or "stale" (from [fetchedAt] age on serve). */
+    val dataFreshness: String = "realtime",
+    /** Sample dates from gaps of > [GAP_THRESHOLD] consecutive missing days in range. */
+    val gapDays: List<LocalDate> = emptyList(),
+    /** Short warning strings (e.g. missing_days=N, outliers=N, sparse_data) for API metadata. */
+    val warnings: List<String> = emptyList()
 )
 
 /**
@@ -53,16 +75,20 @@ interface SymbolAnalyticsCache {
  * - Cache misses are coalesced per key: only one coroutine computes per key; others await that result (no thundering herd).
  * Ensures at most one API call and one computation per symbol/date-range; subsequent requests for the same key
  * are served from cache or from the in-flight computation. Cache key: "${symbol}:${fromDate}:${toDate}".
- * TTL 1 hour, max 1000 entries. Logs cache hits vs misses.
+ * TTL, max size, and data-quality thresholds come from [CacheConfig] and [CalculationsConfig].
  */
-class SymbolAnalyticsCacheService : SymbolAnalyticsCache {
+class SymbolAnalyticsCacheService(
+    private val cacheConfig: CacheConfig,
+    private val calculationsConfig: CalculationsConfig,
+    private val dataQualityConfig: DataQualityConfig
+) : SymbolAnalyticsCache {
 
     private val log = LoggerFactory.getLogger(SymbolAnalyticsCacheService::class.java)
 
     /** Thread-safe cache. No lock needed for get/put; Caffeine handles concurrency. */
     private val cache = Caffeine.newBuilder()
-        .expireAfterWrite(1, TimeUnit.HOURS)
-        .maximumSize(1000)
+        .expireAfterWrite(cacheConfig.ttlSeconds, TimeUnit.SECONDS)
+        .maximumSize(cacheConfig.maxSize.toLong())
         .build<String, SymbolAnalytics>()
 
     /** In-flight computations per key. Coalesces concurrent misses for the same key so only one computes. */
@@ -88,13 +114,29 @@ class SymbolAnalyticsCacheService : SymbolAnalyticsCache {
         marketDataService: MarketDataService
     ): SymbolAnalytics {
         val key = "$symbol:$fromDate:$toDate"
+        // --- Cache HIT: record staleness metric, optionally warn if stale and request includes recent dates, refresh dataFreshness. ---
         cache.getIfPresent(key)?.let { cached ->
             hitsCount.incrementAndGet()
             Metrics.recordCacheHit()
             Metrics.setCacheSize(cache.estimatedSize().toInt())
             Metrics.setCacheHitRate(getHitRate())
             log.info("SymbolAnalytics cache HIT: {}", key)
-            return cached
+            val ageSeconds = (Clock.System.now() - cached.fetchedAt).inWholeSeconds
+            Metrics.recordDataStalenessSeconds(ageSeconds.toDouble(), symbol)
+            if (ageSeconds > cacheConfig.staleSeconds) {
+                val today = Clock.System.todayIn(TimeZone.UTC)
+                val toDateEpoch = toDate.toEpochDays()
+                val todayEpoch = today.toEpochDays()
+                if (toDateEpoch >= todayEpoch - cacheConfig.recentDatesDays) {
+                    log.warn("SymbolAnalytics cache stale for {}: data is {}s old and request includes recent dates", key, ageSeconds)
+                }
+            }
+            val freshness = when {
+                ageSeconds < cacheConfig.oneHourSeconds -> "realtime"
+                ageSeconds < cacheConfig.staleSeconds -> "1 hour old"
+                else -> "stale"
+            }
+            return cached.copy(dataFreshness = freshness)
         }
         missesCount.incrementAndGet()
         Metrics.recordCacheMiss()
@@ -109,9 +151,21 @@ class SymbolAnalyticsCacheService : SymbolAnalyticsCache {
             val dailyReturns = FinancialCalculations.calculateDailyReturns(prices)
             require(dailyReturns.size >= 2) { "Need at least 2 returns for analytics (symbol=$symbol)" }
             val returnValues = dailyReturns.map { it.returnValue }
+            val tradingDays = calculationsConfig.tradingDaysPerYear
+            // Outlier count for metadata (outliers are kept in calculations).
+            val outlierIndices = DataValidator.detectOutliers(returnValues, dataQualityConfig.outlierSigma)
+            Metrics.recordOutliersDetected(outlierIndices.size, symbol)
             val avgDailyReturn = returnValues.average()
-            val (dailyVol, annualizedVol) = FinancialCalculations.calculateVolatility(returnValues, TRADING_DAYS)
-            val annualizedReturn = FinancialCalculations.annualizeReturn(avgDailyReturn, TRADING_DAYS)
+            val (dailyVol, annualizedVol) = FinancialCalculations.calculateVolatility(returnValues, tradingDays)
+            val annualizedReturn = FinancialCalculations.annualizeReturn(avgDailyReturn, tradingDays)
+            // Data quality: expected trading days (US calendar), missing count, gap runs, quality level, warnings.
+            val expectedTradingDays = MarketCalendar.getTradingDays(fromDate, toDate)
+            val actualDays = prices.size
+            val missingDaysCount = (expectedTradingDays - actualDays).coerceAtLeast(0)
+            val gapDaysList = computeGapDays(prices.map { it.date }, fromDate, toDate)
+            val dataQualityLevel = computeDataQuality(expectedTradingDays, actualDays, gapDaysList.size, outlierIndices.size)
+            val warningsList = buildWarnings(missingDaysCount, gapDaysList, outlierIndices.size, expectedTradingDays, actualDays)
+            val fetchedAtNow = Clock.System.now()
             val analytics = SymbolAnalytics(
                 symbol = symbol,
                 fromDate = fromDate,
@@ -121,7 +175,14 @@ class SymbolAnalyticsCacheService : SymbolAnalyticsCache {
                 dailyVolatility = dailyVol,
                 annualizedVolatility = annualizedVol,
                 averageDailyReturn = avgDailyReturn,
-                annualizedReturn = annualizedReturn
+                annualizedReturn = annualizedReturn,
+                fetchedAt = fetchedAtNow,
+                dataQuality = dataQualityLevel,
+                outlierCount = outlierIndices.size,
+                missingDays = missingDaysCount,
+                dataFreshness = "realtime",
+                gapDays = gapDaysList,
+                warnings = warningsList
             )
             cache.put(key, analytics)
             Metrics.setCacheSize(cache.estimatedSize().toInt())
@@ -145,5 +206,56 @@ class SymbolAnalyticsCacheService : SymbolAnalyticsCache {
         val m = missesCount.get()
         val total = h + m
         return if (total == 0L) 0.0 else h.toDouble() / total
+    }
+
+    /** Finds runs of consecutive missing days in [fromDate, toDate] longer than [GAP_THRESHOLD]; returns one sample date per gap (start of gap). */
+    private fun computeGapDays(priceDates: List<LocalDate>, fromDate: LocalDate, toDate: LocalDate): List<LocalDate> {
+        if (priceDates.isEmpty()) return emptyList()
+        val sorted = priceDates.sortedBy { it.toEpochDays() }
+        val fromEpoch = fromDate.toEpochDays()
+        val toEpoch = toDate.toEpochDays()
+        val gapSample = mutableListOf<LocalDate>()
+        var prevEpoch = fromEpoch - 1
+        for (d in sorted) {
+            val epoch = d.toEpochDays()
+            if (epoch > toEpoch) break
+            val run = (epoch - prevEpoch - 1).toInt()
+            if (run > cacheConfig.gapThreshold) {
+                gapSample.add(LocalDate.fromEpochDays(prevEpoch + 1))
+            }
+            prevEpoch = epoch
+        }
+        if (toEpoch - prevEpoch > cacheConfig.gapThreshold) {
+            gapSample.add(LocalDate.fromEpochDays(prevEpoch + 1))
+        }
+        return gapSample
+    }
+
+    /** Derives data quality: POOR (sparse, gaps, or many outliers), ACCEPTABLE (some missing/outliers), else GOOD. */
+    private fun computeDataQuality(expected: Int, actual: Int, gapCount: Int, outlierCount: Int): String {
+        if (expected <= 0) return "GOOD"
+        val ratio = actual.toDouble() / expected
+        val sparse = ratio < cacheConfig.sparseRatio
+        return when {
+            sparse || gapCount > 0 || outlierCount > actual / 4 -> "POOR"
+            ratio < 0.9 || outlierCount > 0 -> "ACCEPTABLE"
+            else -> "GOOD"
+        }
+    }
+
+    /** Builds list of warning strings for metadata (missing_days, gap_days, outliers, sparse_data). */
+    private fun buildWarnings(
+        missingDays: Int,
+        gapDays: List<LocalDate>,
+        outlierCount: Int,
+        expected: Int,
+        actual: Int
+    ): List<String> {
+        val w = mutableListOf<String>()
+        if (missingDays > 0) w.add("missing_days=$missingDays")
+        if (gapDays.isNotEmpty()) w.add("gap_days=${gapDays.size}")
+        if (outlierCount > 0) w.add("outliers=$outlierCount")
+        if (expected > 0 && actual.toDouble() / expected < cacheConfig.sparseRatio) w.add("sparse_data")
+        return w
     }
 }

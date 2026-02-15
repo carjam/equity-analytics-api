@@ -89,7 +89,9 @@ tasks.jacocoTestReport {
                     "**/ApplicationKt*.class",  // Application wiring (StatusPages, plugins)
                     "**/ReturnsRoutes*.class",  // Stub (501)
                     "**/AlphaRoutes*.class",  // Stub (501)
-                    "**/api/*.class"  // Routes/HealthResponse (covered by ApplicationTest)
+                    "**/api/*.class",  // Routes/HealthResponse (covered by ApplicationTest)
+                    "**/resilience/*.class",  // Circuit/retry wiring (covered via ResilientMarketDataService + integration)
+                    "**/lifecycle/*.class"  // ShutdownState (covered via integration)
                 )
             }
         }

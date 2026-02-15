@@ -16,15 +16,15 @@ import io.ktor.server.routing.route
  * Returns daily close-to-close returns (from close-of-day prices only). Path: symbol (1-5 alphanumeric, uppercased).
  * Query: from_date, to_date (optional, YYYY-MM-DD). If dates omitted, uses YTD. Returns 200 with JSON [Returns] or 400/404/500.
  */
-fun Route.returnsRoutes(returnsService: ReturnsService) {
+fun Route.returnsRoutes(returnsService: ReturnsService, maxStringLength: Int = 100) {
     route("tickers") {
         route("{symbol}") {
             route("returns") {
                 get {
-                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"])
-                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date") }
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
                         ?: getCurrentYearStart()
-                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date") }
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
                         ?: getToday()
                     val returns = returnsService.calculateReturns(symbol, fromDate, toDate)
                     call.respond(HttpStatusCode.OK, returns)

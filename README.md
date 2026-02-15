@@ -66,6 +66,11 @@ Default is `development` (non-production), so local and test runs use compact an
 - **Returns:** Day-over-day percentage change: `(close_t - close_{t-1}) / close_{t-1}`.
 - **Volatility, alpha, beta, Sharpe, correlation:** All computed from these close-of-day returns (no intraday or open/high/low).
 
+### Market data and calendar
+
+- **Trading calendar:** The API uses a built-in **US equity (NYSE/NASDAQ) calendar** for trading-day counts and data-quality checks (e.g. expected vs actual trading days). Holiday dates are computed from **year-dependent rules** (e.g. Easter, Thanksgiving). For production use over long or multi-year ranges, or for **up-to-date holiday lists**, consider integrating a **third-party calendar or holiday data source**.
+- **Beyond US markets:** If the tool is expanded to other regions or exchanges, a **third-party integration** is recommended to source **exchange-specific holidays and trading hours**, since rules and observance vary by country and venue.
+
 ## Analytics cache and concurrency
 
 The API is built for **high concurrency and availability**. Analytics (returns, alpha, volatility, beta, Sharpe, correlation) share a single **SymbolAnalytics** cache per symbol/date-range:

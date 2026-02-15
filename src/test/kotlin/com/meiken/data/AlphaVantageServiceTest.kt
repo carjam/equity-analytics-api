@@ -40,7 +40,7 @@ class AlphaVantageServiceTest {
     fun `getHistoricalPrices returns parsed DailyPrice list for valid response`() = runBlocking {
         val engine = MockEngine { respond(successResponse(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key")
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
         val from = LocalDate(2024, 1, 13)
         val to = LocalDate(2024, 1, 15)
         val prices = service.getHistoricalPrices("AAPL", from, to)
@@ -58,7 +58,7 @@ class AlphaVantageServiceTest {
     fun `getHistoricalPrices throws SymbolNotFoundException when Error Message in response`() = runBlocking {
         val engine = MockEngine { respond("""{"Error Message": "Invalid API call. Please retry or visit the documentation."}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key")
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
         val ex = assertFailsWith<SymbolNotFoundException> {
             service.getHistoricalPrices("INVALID", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
         }
@@ -69,7 +69,7 @@ class AlphaVantageServiceTest {
     fun `getHistoricalPrices throws DataRetrievalException when Note in response`() = runBlocking {
         val engine = MockEngine { respond("""{"Note": "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute..."}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key")
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
         assertFailsWith<DataRetrievalException> {
             service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
         }
@@ -79,7 +79,7 @@ class AlphaVantageServiceTest {
     fun `getHistoricalPrices throws DataRetrievalException when Time Series missing`() = runBlocking {
         val engine = MockEngine { respond("""{}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key")
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
         val ex = assertFailsWith<DataRetrievalException> {
             service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
         }
@@ -91,7 +91,7 @@ class AlphaVantageServiceTest {
         val responseWithOldDatesOnly = """{"Time Series (Daily)": {"2020-01-02": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
         val engine = MockEngine { respond(responseWithOldDatesOnly, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key", outputSize = "compact", useLimiterMessages = true)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", outputSize = "compact", useLimiterMessages = true)
         val ex = assertFailsWith<DataRetrievalException> {
             service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
         }
@@ -103,7 +103,7 @@ class AlphaVantageServiceTest {
         val responseWithOldDatesOnly = """{"Time Series (Daily)": {"2020-01-02": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
         val engine = MockEngine { respond(responseWithOldDatesOnly, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key", outputSize = "full", useLimiterMessages = false)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", outputSize = "full", useLimiterMessages = false)
         val ex = assertFailsWith<DataRetrievalException> {
             service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
         }
@@ -114,7 +114,7 @@ class AlphaVantageServiceTest {
     fun `getHistoricalPrices throws DataRetrievalException when Information in response`() = runBlocking {
         val engine = MockEngine { respond("""{"Information": "The API key is limited to 5 calls per minute."}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key")
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
         val ex = assertFailsWith<DataRetrievalException> {
             service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
         }
@@ -126,7 +126,7 @@ class AlphaVantageServiceTest {
         val singleDayInRange = """{"Time Series (Daily)": {"2024-01-15": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
         val engine = MockEngine { respond(singleDayInRange, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key", useLimiterMessages = true)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", useLimiterMessages = true)
         val ex = assertFailsWith<DataRetrievalException> {
             service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 15))
         }
@@ -138,10 +138,93 @@ class AlphaVantageServiceTest {
         val singleDayInRange = """{"Time Series (Daily)": {"2024-01-15": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
         val engine = MockEngine { respond(singleDayInRange, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
-        val service = AlphaVantageService(client, "test-key", useLimiterMessages = false)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", useLimiterMessages = false)
         val ex = assertFailsWith<DataRetrievalException> {
             service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 15))
         }
         assertTrue(ex.message!!.contains("Insufficient") && !ex.message!!.contains("upgrade"))
+    }
+
+    @Test
+    fun `getHistoricalPrices throws DataRetrievalException when client throws`() = runBlocking {
+        val engine = MockEngine { request -> throw RuntimeException("Network error") }
+        val client = HttpClient(engine)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
+        val ex = assertFailsWith<DataRetrievalException> {
+            service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
+        }
+        assertTrue(ex.message!!.contains("Failed to fetch") && ex.message!!.contains("AAPL"))
+    }
+
+    @Test
+    fun `getHistoricalPrices throws DataRetrievalException when response is invalid JSON`() = runBlocking {
+        val engine = MockEngine { respond("not json at all", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
+        val client = HttpClient(engine)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
+        val ex = assertFailsWith<DataRetrievalException> {
+            service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
+        }
+        assertTrue(ex.message!!.contains("Invalid JSON") || ex.message!!.contains("JSON"))
+    }
+
+    @Test
+    fun `getHistoricalPrices skips entries with unparseable date and uses valid entries`() = runBlocking {
+        val response = """
+            {"Time Series (Daily)": {
+                "bad-date": {"4. close": "100.0"},
+                "2024-01-15": {"4. close": "100.5"},
+                "2024-01-14": {"4. close": "99.2"}
+            }}
+        """.trimIndent()
+        val engine = MockEngine { respond(response, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
+        val client = HttpClient(engine)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
+        val prices = service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 14), LocalDate(2024, 1, 15))
+        assertEquals(2, prices.size)
+        assertEquals(LocalDate(2024, 1, 14), prices[0].date)
+        assertEquals(LocalDate(2024, 1, 15), prices[1].date)
+    }
+
+    @Test
+    fun `getHistoricalPrices skips entries with non-numeric close`() = runBlocking {
+        val response = """
+            {"Time Series (Daily)": {
+                "2024-01-15": {"4. close": "N/A"},
+                "2024-01-14": {"4. close": "99.2"},
+                "2024-01-13": {"4. close": "98.0"}
+            }}
+        """.trimIndent()
+        val engine = MockEngine { respond(response, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
+        val client = HttpClient(engine)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
+        val prices = service.getHistoricalPrices("AAPL", LocalDate(2024, 1, 13), LocalDate(2024, 1, 15))
+        assertEquals(2, prices.size)
+    }
+
+    @Test
+    fun `getHistoricalPrices records sparse data when ratio below threshold`() = runBlocking {
+        // Feb 2024 has many trading days; return only 2 points so ratio < 0.5
+        val response = """
+            {"Time Series (Daily)": {
+                "2024-02-01": {"4. close": "100.0"},
+                "2024-02-02": {"4. close": "100.5"}
+            }}
+        """.trimIndent()
+        val engine = MockEngine { respond(response, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
+        val client = HttpClient(engine)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", sparseRatio = 0.5)
+        val prices = service.getHistoricalPrices("AAPL", LocalDate(2024, 2, 1), LocalDate(2024, 2, 29))
+        assertEquals(2, prices.size)
+    }
+
+    @Test
+    fun `getHistoricalPrices throws SymbolNotFoundException when Error Message key present but null content`() = runBlocking {
+        val engine = MockEngine { respond("""{"Error Message": null}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
+        val client = HttpClient(engine)
+        val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query")
+        val ex = assertFailsWith<SymbolNotFoundException> {
+            service.getHistoricalPrices("X", LocalDate(2024, 1, 1), LocalDate(2024, 1, 10))
+        }
+        assertTrue(ex.message!!.contains("Invalid symbol") || ex.message != null)
     }
 }

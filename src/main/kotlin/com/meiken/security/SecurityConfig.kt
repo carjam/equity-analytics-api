@@ -12,7 +12,8 @@ data class SecurityConfig(
     val requireHttps: Boolean,
     val allowedOrigins: List<String>,
     val rateLimitAnonymousPerMinute: Int,
-    val rateLimitAuthenticatedPerMinute: Int
+    val rateLimitAuthenticatedPerMinute: Int,
+    val maxStringLength: Int
 ) {
     companion object {
         fun from(config: ApplicationConfig): SecurityConfig {
@@ -25,7 +26,8 @@ data class SecurityConfig(
                     requireHttps = false,
                     allowedOrigins = emptyList(),
                     rateLimitAnonymousPerMinute = 100,
-                    rateLimitAuthenticatedPerMinute = 1000
+                    rateLimitAuthenticatedPerMinute = 1000,
+                    maxStringLength = 100
                 )
             }
             val apiKeysEnabled = security.propertyOrNull("apiKeysEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
@@ -47,6 +49,7 @@ data class SecurityConfig(
             }
             val anonymousPerMinute = rateLimit?.propertyOrNull("requestsPerMinute")?.getString()?.toIntOrNull() ?: 100
             val authenticatedPerMinute = rateLimit?.propertyOrNull("authenticatedPerMinute")?.getString()?.toIntOrNull() ?: 1000
+            val maxStringLength = security.propertyOrNull("maxStringLength")?.getString()?.toIntOrNull() ?: 100
 
             return SecurityConfig(
                 apiKeysEnabled = apiKeysEnabled,
@@ -54,7 +57,8 @@ data class SecurityConfig(
                 requireHttps = requireHttps,
                 allowedOrigins = allowedOrigins,
                 rateLimitAnonymousPerMinute = anonymousPerMinute,
-                rateLimitAuthenticatedPerMinute = authenticatedPerMinute
+                rateLimitAuthenticatedPerMinute = authenticatedPerMinute,
+                maxStringLength = maxStringLength
             )
         }
     }

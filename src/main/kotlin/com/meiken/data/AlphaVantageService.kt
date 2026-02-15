@@ -1,9 +1,12 @@
 package com.meiken.data
 
+import com.meiken.config.DataQualityConfig
 import com.meiken.error.DataRetrievalException
 import com.meiken.error.SymbolNotFoundException
 import com.meiken.model.DailyPrice
 import com.meiken.observability.Metrics
+import com.meiken.util.MarketCalendar
+import com.meiken.validator.DataValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -15,7 +18,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 
-private const val BASE_URL = "https://www.alphavantage.co/query"
 private const val TIME_SERIES_KEY = "Time Series (Daily)"
 private const val OPEN_KEY = "1. open"
 private const val HIGH_KEY = "2. high"
@@ -25,21 +27,23 @@ private const val VOLUME_KEY = "5. volume"
 private const val ERROR_MESSAGE_KEY = "Error Message"
 private const val NOTE_KEY = "Note"
 private const val INFORMATION_KEY = "Information"
-private const val RAW_RESPONSE_LOG_LIMIT = 500
 
 /**
  * Implements [MarketDataService] using Alpha Vantage TIME_SERIES_DAILY API.
+ * [baseUrl], [dataQualityConfig], [rawResponseLogLimit], and [sparseRatio] come from config.
  * [outputSize]: "compact" = last ~100 trading days (~4 months, free tier); "full" = full history (premium).
  * [useLimiterMessages]: when true (non-prod), no/insufficient data throws a message suggesting upgrade; when false (prod), generic message.
- * Behavior is config-driven via [outputSize] and [useLimiterMessages]; see application.conf and README (meiken.environment).
- * Returns close-of-day prices only; one bar per calendar day per ticker; uses "4. close" (daily close).
  * Throws [SymbolNotFoundException] for invalid symbol, [DataRetrievalException] for other errors.
  */
 class AlphaVantageService(
     private val client: HttpClient,
     private val apiKey: String,
+    private val baseUrl: String,
     private val outputSize: String = "compact",
-    private val useLimiterMessages: Boolean = true
+    private val useLimiterMessages: Boolean = true,
+    private val dataQualityConfig: DataQualityConfig? = null,
+    private val rawResponseLogLimit: Int = 500,
+    private val sparseRatio: Double = 0.5
 ) : MarketDataService {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -50,7 +54,7 @@ class AlphaVantageService(
         val startNanos = System.nanoTime()
         return try {
             val response = try {
-                client.get(BASE_URL) {
+                client.get(baseUrl) {
                     parameter("function", "TIME_SERIES_DAILY")
                     parameter("symbol", symbol)
                     parameter("apikey", apiKey)
@@ -66,7 +70,7 @@ class AlphaVantageService(
             json.parseToJsonElement(response).jsonObject
         } catch (e: Exception) {
             log.error("Invalid JSON response for {}: {}", symbol, e.message)
-            log.debug("Raw response (first {} chars): {}", RAW_RESPONSE_LOG_LIMIT, response.take(RAW_RESPONSE_LOG_LIMIT))
+            log.debug("Raw response (first {} chars): {}", rawResponseLogLimit, response.take(rawResponseLogLimit))
             Metrics.recordAlphaVantageCall(symbol, "error")
             Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException("Invalid JSON response for $symbol", e)
@@ -96,7 +100,7 @@ class AlphaVantageService(
         if (timeSeries == null) {
             val topLevelKeys = root.keys.joinToString(", ")
             log.error("Missing 'Time Series (Daily)' in response for {}. Top-level keys: {}", symbol, topLevelKeys)
-            log.debug("Raw response (first {} chars): {}", RAW_RESPONSE_LOG_LIMIT, response.take(RAW_RESPONSE_LOG_LIMIT))
+            log.debug("Raw response (first {} chars): {}", rawResponseLogLimit, response.take(rawResponseLogLimit))
             Metrics.recordAlphaVantageCall(symbol, "error")
             Metrics.recordAlphaVantageDuration((System.nanoTime() - startNanos) / 1e9)
             throw DataRetrievalException("Missing 'Time Series (Daily)' in response for $symbol. Top-level keys: $topLevelKeys")
@@ -105,7 +109,7 @@ class AlphaVantageService(
         val fromEpoch = fromDate.toEpochDays()
         val toEpoch = toDate.toEpochDays()
 
-        val prices = timeSeries.entries
+        val rawPrices = timeSeries.entries
             .mapNotNull { (dateStr, dayObj) ->
                 val date = parseDate(dateStr) ?: return@mapNotNull null
                 if (date.toEpochDays() !in fromEpoch..toEpoch) return@mapNotNull null
@@ -119,6 +123,19 @@ class AlphaVantageService(
                 DailyPrice(date = date, close = close, open = open, high = high, low = low, volume = volume)
             }
             .sortedBy { it.date.toEpochDays() }
+
+        // Validate and clean prices (unrealistic values, duplicates, negative volume); record data-quality metrics.
+        val validationResult = DataValidator.validatePriceData(rawPrices, symbol, dataQualityConfig)
+        val prices = validationResult.cleanedPrices
+        for (issue in validationResult.issues) {
+            Metrics.recordDataQualityIssue(issue.type, symbol)
+        }
+        // Compare actual points to expected US trading days; warn and record metric if data is sparse.
+        val expectedTradingDays = MarketCalendar.getTradingDays(fromDate, toDate)
+        if (expectedTradingDays > 0 && prices.isNotEmpty() && prices.size.toDouble() / expectedTradingDays < sparseRatio) {
+            log.warn("Sparse data for {}: {} points vs {} expected trading days", symbol, prices.size, expectedTradingDays)
+            Metrics.recordDataQualityIssue("sparse_data", symbol)
+        }
 
         if (prices.isEmpty()) {
             Metrics.recordAlphaVantageCall(symbol, "no_data")

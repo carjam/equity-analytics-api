@@ -252,4 +252,43 @@ object Metrics {
                 .increment(count.toDouble())
         }
     }
+
+    // --- Data quality: data_quality_issues_total (type, symbol), data_staleness_seconds, outliers_detected_total ---
+
+    /** Increments data_quality_issues_total. [type] e.g. "unrealistic_price", "duplicate_date", "negative_volume", "large_change", "sparse_data". */
+    fun recordDataQualityIssue(type: String, symbol: String) {
+        registry?.let { r ->
+            Counter.builder("data_quality_issues_total")
+                .description("Total data quality issues by type and symbol")
+                .tag("app", "meiken")
+                .tag("type", type)
+                .tag("symbol", symbol)
+                .register(r)
+                .increment()
+        }
+    }
+
+    /** Records age in seconds of cached analytics when served (for monitoring staleness). */
+    fun recordDataStalenessSeconds(seconds: Double, symbol: String = "") {
+        registry?.let { r ->
+            io.micrometer.core.instrument.DistributionSummary.builder("data_staleness_seconds")
+                .description("Age of cached data in seconds when served")
+                .tag("app", "meiken")
+                .tag("symbol", symbol)
+                .register(r)
+                .record(seconds)
+        }
+    }
+
+    /** Records number of outliers (3-sigma) detected in returns for a symbol (outliers are kept in calculations). */
+    fun recordOutliersDetected(count: Int, symbol: String = "") {
+        registry?.let { r ->
+            Counter.builder("outliers_detected_total")
+                .description("Total outliers detected (3-sigma) in returns")
+                .tag("app", "meiken")
+                .tag("symbol", symbol)
+                .register(r)
+                .increment(count.toDouble())
+        }
+    }
 }

@@ -21,6 +21,13 @@ import com.meiken.security.SecurityConfig
 import com.meiken.security.TlsConfig
 import com.meiken.security.createSecurityHeadersPlugin
 import com.meiken.security.installRateLimiting
+import com.meiken.config.ApiConfig
+import com.meiken.config.CacheConfig
+import com.meiken.config.CalculationsConfig
+import com.meiken.config.DataQualityConfig
+import com.meiken.config.DateRangesConfig
+import com.meiken.config.DefaultsConfig
+import com.meiken.config.HttpClientConfig
 import com.meiken.config.PerformanceConfig
 import com.meiken.config.ResilienceConfig
 import com.meiken.resilience.CircuitBreakerConfig
@@ -63,14 +70,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
  * InvalidDateRangeException/BadRequestException -> 400, SymbolNotFoundException -> 404,
  * DataRetrievalException -> 500, ExternalServiceException -> 502, other Throwable -> 500.
  */
-fun Application.installStatusPages() {
+fun Application.installStatusPages(maxDays: Int = 365) {
     install(StatusPages) {
         exception<InvalidDateRangeException> { call, cause ->
             call.respond(
                 HttpStatusCode.BadRequest,
                 ErrorResponse(ErrorDetail(
                     "INVALID_DATE_RANGE",
-                    cause.message ?: "Invalid date range. Use from_date ≤ to_date, no future dates, and span at most 365 days."
+                    cause.message ?: "Invalid date range. Use from_date ≤ to_date, no future dates, and span at most $maxDays days."
                 ))
             )
         }
@@ -170,7 +177,8 @@ fun Application.module() {
         }
     }
 
-    installStatusPages()
+    val dateRangesConfig = DateRangesConfig.from(environment.config)
+    installStatusPages(dateRangesConfig.maxDays)
     install(CallLogging)
 
     val prometheusRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
@@ -208,16 +216,41 @@ fun Application.module() {
     val circuitBreaker = CircuitBreakerConfig.createCircuitBreaker(resilienceConfig.circuitBreaker)
     val retry = RetryConfig.createRetry(resilienceConfig.retry)
 
+    val cacheConfig = CacheConfig.from(environment.config)
+    val dataQualityConfig = DataQualityConfig.from(environment.config)
+    val calculationsConfig = CalculationsConfig.from(environment.config)
+    val defaultsConfig = DefaultsConfig.from(environment.config)
+    val apiConfig = ApiConfig.from(environment.config)
+    val httpClientConfig = HttpClientConfig.from(environment.config)
+    val maxDays = dateRangesConfig.maxDays
+    val alphaVantageConfig = try {
+        environment.config.config("meiken").config("alphaVantage")
+    } catch (_: Exception) {
+        null
+    }
+    val alphaVantageBaseUrl = alphaVantageConfig?.propertyOrNull("baseUrl")?.getString() ?: "https://www.alphavantage.co/query"
+    val rawResponseLogLimit = alphaVantageConfig?.propertyOrNull("rawResponseLogLimit")?.getString()?.toIntOrNull() ?: 500
+
     Runtime.getRuntime().addShutdownHook(Thread {
         ShutdownState.signalShutdown()
     })
 
     val environmentName = environment.config.propertyOrNull("meiken.environment")?.getString() ?: "development"
-    val marketDataService = createMarketDataService(environmentName, resilienceConfig, circuitBreaker, retry)
-    val analyticsCache = SymbolAnalyticsCacheService()
-    val returnsService = ReturnsServiceImpl(analyticsCache, marketDataService)
-    val alphaService = AlphaServiceImpl(analyticsCache, marketDataService)
-    val analyticsService = AnalyticsServiceImpl(analyticsCache, marketDataService)
+    val marketDataService = createMarketDataService(
+        environmentName,
+        resilienceConfig,
+        circuitBreaker,
+        retry,
+        dataQualityConfig,
+        alphaVantageBaseUrl,
+        rawResponseLogLimit,
+        cacheConfig.sparseRatio,
+        httpClientConfig
+    )
+    val analyticsCache = SymbolAnalyticsCacheService(cacheConfig, calculationsConfig, dataQualityConfig)
+    val returnsService = ReturnsServiceImpl(analyticsCache, marketDataService, maxDays)
+    val alphaService = AlphaServiceImpl(analyticsCache, marketDataService, maxDays, calculationsConfig.tradingDaysPerYear)
+    val analyticsService = AnalyticsServiceImpl(analyticsCache, marketDataService, maxDays)
     configureRouting(
         returnsService = returnsService,
         alphaService = alphaService,
@@ -228,7 +261,10 @@ fun Application.module() {
         apiKeysEnabled = securityConfig.apiKeysEnabled,
         apiKeyManager = apiKeyManager,
         circuitBreaker = circuitBreaker,
-        isShuttingDown = { ShutdownState.isShuttingDown() }
+        isShuttingDown = { ShutdownState.isShuttingDown() },
+        defaultsConfig = defaultsConfig,
+        securityConfig = securityConfig,
+        apiConfig = apiConfig
     )
 }
 
@@ -239,7 +275,12 @@ private fun createMarketDataService(
     environmentName: String,
     resilienceConfig: ResilienceConfig,
     circuitBreaker: io.github.resilience4j.circuitbreaker.CircuitBreaker,
-    retry: io.github.resilience4j.retry.Retry
+    retry: io.github.resilience4j.retry.Retry,
+    dataQualityConfig: DataQualityConfig,
+    alphaVantageBaseUrl: String,
+    rawResponseLogLimit: Int,
+    sparseRatio: Double,
+    httpClientConfig: HttpClientConfig
 ): MarketDataService {
     val apiKey = System.getenv("ALPHA_VANTAGE_API_KEY")
     val isProduction = environmentName.equals("production", ignoreCase = true)
@@ -255,16 +296,20 @@ private fun createMarketDataService(
                 endpoint {
                     connectTimeout = timeout.connectionTimeoutMs
                     socketTimeout = timeout.alphaVantageTimeoutMs
-                    keepAliveTime = 60_000
-                    maxConnectionsPerRoute = 50
+                    keepAliveTime = httpClientConfig.keepAliveTimeMs
+                    maxConnectionsPerRoute = httpClientConfig.maxConnectionsPerRoute
                 }
             }
         }
         val delegate = AlphaVantageService(
             client = client,
             apiKey = apiKey,
+            baseUrl = alphaVantageBaseUrl,
             outputSize = if (isProduction) "full" else "compact",
-            useLimiterMessages = !isProduction
+            useLimiterMessages = !isProduction,
+            dataQualityConfig = dataQualityConfig,
+            rawResponseLogLimit = rawResponseLogLimit,
+            sparseRatio = sparseRatio
         )
         val waitSeconds = (resilienceConfig.circuitBreaker.waitDurationInOpenStateMs / 1000).toInt()
         ResilientMarketDataService(delegate, circuitBreaker, retry, waitSeconds)

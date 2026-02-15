@@ -103,7 +103,11 @@ class ReturnsRoutesTest {
     fun `symbol not found returns 404`() = testApplication {
         environment { config = MapApplicationConfig() }
         val marketData = ThrowingMarketDataService(throwForSymbols = setOf("NONE"))
-        val analyticsCache = SymbolAnalyticsCacheService()
+        val analyticsCache = SymbolAnalyticsCacheService(
+            com.meiken.config.TestConfig.cacheConfig,
+            com.meiken.config.TestConfig.calculationsConfig,
+            com.meiken.config.TestConfig.dataQualityConfig
+        )
         val returnsService = ReturnsServiceImpl(analyticsCache, marketData)
         val alphaService = AlphaServiceImpl(analyticsCache, marketData)
         val analyticsService = AnalyticsServiceImpl(analyticsCache, marketData)

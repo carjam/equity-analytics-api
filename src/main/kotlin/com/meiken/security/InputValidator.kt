@@ -20,11 +20,13 @@ object InputValidator {
 
     /**
      * Validates ticker symbol: 1-5 uppercase alphanumeric characters.
+     * @param maxLength max length after sanitization (from config meiken.security.maxStringLength).
      * @throws BadRequestException if invalid
      */
-    fun validateSymbol(value: String?, paramName: String = "symbol"): String {
+    @JvmOverloads
+    fun validateSymbol(value: String?, paramName: String = "symbol", maxLength: Int = MAX_STRING_LENGTH): String {
         if (value.isNullOrBlank()) throw BadRequestException("$paramName is required")
-        val sanitized = sanitizeString(value).uppercase()
+        val sanitized = sanitizeString(value, maxLength).uppercase()
         if (!sanitized.matches(SYMBOL_REGEX)) {
             throw BadRequestException("$paramName must be 1-5 alphanumeric characters (uppercase)")
         }
@@ -33,11 +35,13 @@ object InputValidator {
 
     /**
      * Validates date string: YYYY-MM-DD, not in future.
+     * @param maxLength max length after sanitization (from config meiken.security.maxStringLength).
      * @throws BadRequestException if invalid
      */
-    fun validateDate(value: String?, paramName: String = "date"): LocalDate {
+    @JvmOverloads
+    fun validateDate(value: String?, paramName: String = "date", maxLength: Int = MAX_STRING_LENGTH): LocalDate {
         if (value.isNullOrBlank()) throw BadRequestException("$paramName is required")
-        val sanitized = sanitizeString(value)
+        val sanitized = sanitizeString(value, maxLength)
         val date = try {
             LocalDate.parse(sanitized)
         } catch (e: Exception) {
