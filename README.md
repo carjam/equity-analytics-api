@@ -466,6 +466,10 @@ scrape_configs:
 - **Logback** + **logstash-logback-encoder** for JSON logging
 - **JUnit 5** for tests
 
+## Documentation
+
+Additional docs (API spec, architecture, runbooks) are in **docs/**. See **[docs/README.md](docs/README.md)** for an index and which documents are maintained vs historical.
+
 ## License
 
 See repository license.
