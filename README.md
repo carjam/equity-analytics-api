@@ -79,7 +79,26 @@ The API is built for **high concurrency and availability**. Analytics (returns, 
 - **Per-key coalescing on miss:** When the cache misses for a key, only **one** request computes (fetches prices and calculates metrics); other concurrent requests for the **same** key wait for that result instead of triggering duplicate API calls (no thundering herd). Requests for **different** keys compute in parallel.
 - **Robust:** One API call and one computation per symbol/date-range; subsequent requests are served from cache or from the in-flight computation. Failures are propagated to all waiters for that key.
 
+**Cache expiration and eviction (symbol analytics):**
+
+- **Expiration:** **Expire-after-write (TTL).** Each cache entry is removed after a fixed time since it was written. Default: **1 hour** (`meiken.cache.ttl` = 3600 seconds). Override with env `CACHE_TTL` (seconds).
+- **Eviction:** When the cache is full, entries are evicted by size. Default **max size** 1000 entries (`meiken.cache.maxSize`). Override with env `CACHE_MAX_SIZE`.
+- **Staleness (observability only):** `staleSeconds` (default 24 h) and `oneHourSeconds` (3600) are used only for the `dataFreshness` label on responses ("realtime" / "1 hour old" / "stale") and for a log warning when serving stale data for requests that include recent dates. They do **not** change when entries are expired; expiration is purely TTL + max size.
+
 This keeps the service performant and rate-limit friendly under heavy concurrent usage.
+
+## Design rationale for additional analytics
+
+Beyond the required **Returns** and **Alpha** endpoints, the following analytics were added and exposed as separate endpoints:
+
+| Addition       | Rationale |
+|----------------|-----------|
+| **Volatility** | Standard deviation of daily returns (daily and annualized). Core risk metric; users need to assess how much a ticker’s returns vary over the period. |
+| **Sharpe ratio** | Risk-adjusted return: (annualized return − risk-free rate) / annualized volatility. Lets users compare returns per unit of risk; configurable risk-free rate. |
+| **Beta**       | Sensitivity of target to benchmark: covariance(target, benchmark) / variance(benchmark). Standard measure of systematic (market) risk relative to a benchmark. |
+| **Rolling correlation** | Correlation between two tickers over a configurable window. Surfaces how closely two series move together over time; useful for diversification and pair strategies. |
+
+All four reuse the same **close-of-day returns** and **SymbolAnalytics** cache as Returns and Alpha, so there is no extra market-data cost and behavior stays consistent (precision, date alignment, numerical stability).
 
 ## API Endpoints
 
@@ -282,7 +301,7 @@ The API uses **Resilience4j** for circuit breaker, retry, timeouts, and graceful
 
 ### Caching strategy
 
-- **In-memory (default):** Caffeine cache for symbol analytics; single instance only. Cache is **non-critical** (cold start is acceptable).
+- **In-memory (default):** Caffeine cache for symbol analytics; single instance only. Cache is **non-critical** (cold start is acceptable). Expiration is **expire-after-write (TTL)** default 1 hour; max size 1000 entries (see [Analytics cache and concurrency](#analytics-cache-and-concurrency)).
 - **Horizontal scaling:** For multiple instances, use a **distributed cache** (e.g. Redis). Config placeholder: `meiken.cache.type = "redis"` and `meiken.cache.redis` (commented in `application.conf`). Redis implementation is optional/future.
 - **Cache-Control headers:**  
   - `/health`: `no-cache`  
