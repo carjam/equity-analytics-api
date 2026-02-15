@@ -18,31 +18,29 @@ Meiken is a REST API for computing financial analytics on stock market data, inc
 
 **Business Rules**:
 1. Date range validation:
-   - Maximum range: 1 year (365 days)
-   - `from_date` must be before `to_date`
+   - Maximum range: 1 year (365 days, configurable)
+   - `from_date` must be before or equal to `to_date`
    - Dates cannot be in the future
 2. Default behavior: If no dates provided, use Year-to-Date (YTD)
 3. Data source: Alpha Vantage API (or abstracted service layer)
 
-**Response Format**:
+**Response Format** (JSON; field names as implemented):
 ```json
 {
   "symbol": "AAPL",
-  "from_date": "2024-01-01",
-  "to_date": "2024-12-31",
-  "returns": [
-    {
-      "date": "2024-01-02",
-      "daily_return": 0.0234
-    },
-    {
-      "date": "2024-01-03",
-      "daily_return": -0.0156
-    }
+  "fromDate": "2024-01-01",
+  "toDate": "2024-12-31",
+  "dailyReturns": [
+    { "date": "2024-01-02", "returnValue": 0.0234 },
+    { "date": "2024-01-03", "returnValue": -0.0156 }
   ],
   "metadata": {
-    "data_points": 252,
-    "source": "alpha_vantage"
+    "dataPoints": 252,
+    "source": "market_data",
+    "dataQuality": "GOOD",
+    "outlierCount": 0,
+    "missingDays": 0,
+    "warnings": null
   }
 }
 ```
@@ -74,19 +72,23 @@ daily_return = (price_today - price_yesterday) / price_yesterday
 2. Both tickers must have overlapping data for the specified period
 3. Alpha calculation requires at least 30 trading days of data
 
-**Response Format**:
+**Response Format** (JSON; field names as implemented):
 ```json
 {
   "target": "AAPL",
   "benchmark": "SPY",
-  "from_date": "2024-01-01",
-  "to_date": "2024-12-31",
+  "fromDate": "2024-01-01",
+  "toDate": "2024-12-31",
   "alpha": 0.0523,
   "metadata": {
-    "data_points": 252,
-    "calculation_method": "simple_regression",
-    "target_annualized_return": 0.2845,
-    "benchmark_annualized_return": 0.2322
+    "dataPoints": 252,
+    "calculationMethod": "annualized_excess_return",
+    "targetAnnualizedReturn": 0.2845,
+    "benchmarkAnnualizedReturn": 0.2322,
+    "dataQuality": "GOOD",
+    "outlierCount": 0,
+    "missingDays": 0,
+    "warnings": null
   }
 }
 ```
@@ -124,16 +126,13 @@ beta = covariance(target_returns, benchmark_returns) / variance(benchmark_return
 
 Calculates historical volatility (standard deviation of returns).
 
-**Response**:
+**Response** (camelCase as implemented):
 ```json
 {
   "symbol": "AAPL",
-  "from_date": "2024-01-01",
-  "to_date": "2024-12-31",
-  "volatility": {
-    "daily": 0.0189,
-    "annualized": 0.2987
-  }
+  "fromDate": "2024-01-01",
+  "toDate": "2024-12-31",
+  "volatility": { "daily": 0.0189, "annualized": 0.2987 }
 }
 ```
 
@@ -180,11 +179,8 @@ Calculates rolling correlation between two tickers.
 {
   "error": {
     "code": "INVALID_DATE_RANGE",
-    "message": "Date range exceeds maximum of 1 year",
-    "details": {
-      "max_days": 365,
-      "requested_days": 400
-    }
+    "message": "Date range cannot exceed 365 days (requested 400 days)",
+    "details": null
   }
 }
 ```
@@ -229,6 +225,7 @@ interface MarketDataService {
     ): List<DailyPrice>
 }
 ```
+(Returns a list of close-of-day prices; no Result wrapper.)
 
 ### Implementations
 1. **AlphaVantageService**: Production implementation
@@ -240,11 +237,10 @@ interface MarketDataService {
 
 1. ✅ All required endpoints implemented and functional
 2. ✅ Proper input validation and error handling
-3. ✅ Comprehensive unit test coverage (>80%)
-4. ✅ Integration tests for all endpoints
-5. ✅ Structured logging throughout
-6. ✅ API documentation (OpenAPI/Swagger)
-7. ✅ Clear code structure with separation of concerns
-8. ✅ README with setup and usage instructions
-9. ✅ Numerical accuracy verified with known test cases
-10. ✅ Performance meets requirements (<500ms for typical request)
+3. ✅ Comprehensive unit test coverage (≥90% instruction coverage)
+4. ✅ Integration tests for API endpoints (Ktor test host)
+5. ✅ Structured logging throughout (JSON, correlation IDs)
+6. ✅ Clear code structure with separation of concerns
+7. ✅ README with setup and usage instructions
+8. ✅ Numerical accuracy verified with known test cases
+9. ✅ Performance meets requirements (target p95 &lt; 500 ms for typical request)

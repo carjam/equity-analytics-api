@@ -32,17 +32,19 @@ Examples:
 
 ## Structured Logging Format
 
-All logs are JSON:
+When JSON logging is enabled (e.g. logstash-logback-encoder), logs look like:
 
+```json
 {
   "@timestamp": "2024-02-14T23:27:03.090Z",
   "level": "INFO",
-  "logger": "com.meiken.Application",
+  "logger_name": "com.meiken.Application",
   "message": "Request completed",
-  "correlationId": "req-1234567890",
-  "duration": 45,
-  "endpoint": "/api/v1/alpha"
+  "correlationId": "req-1234567890"
 }
+```
+
+Exact field names (e.g. `logger` vs `logger_name`) depend on `logback.xml` and the encoder in use. Correlation ID is in MDC and included when configured.
 
 ## Correlation IDs
 

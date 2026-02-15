@@ -3,22 +3,21 @@
 ## Technology Stack
 
 ### Core Framework
-- **Language**: Kotlin 1.9+
+- **Language**: Kotlin 1.8
 - **Framework**: Ktor (lightweight, async REST framework)
 - **Build Tool**: Gradle (Kotlin DSL)
-- **JVM**: Java 17+
+- **JVM**: Java 11 (jvmToolchain(11))
 
 ### Libraries
-- **HTTP Client**: Ktor Client (for Alpha Vantage API calls)
+- **HTTP Client**: Ktor Client (CIO, for Alpha Vantage API calls)
 - **JSON Serialization**: kotlinx.serialization
-- **Logging**: SLF4J + Logback
-- **Testing**: 
-  - JUnit 5
-  - Ktor Test
-  - MockK (mocking framework)
-  - Kotest (assertions)
+- **Logging**: SLF4J + Logback (logstash-logback-encoder for JSON)
+- **Testing**: JUnit 5, Ktor Test Host, kotlin-test; ktor-client-mock for data layer
 - **Date/Time**: kotlinx-datetime
 - **Coroutines**: kotlinx.coroutines
+- **Cache**: Caffeine (in-memory symbol analytics)
+- **Resilience**: Resilience4j (circuit breaker, retry)
+- **Metrics**: Micrometer + Prometheus
 
 ---
 
@@ -62,17 +61,16 @@
 
 **Key Classes**:
 ```kotlin
-// Route definitions
-fun Application.configureRouting()
-fun Route.returnsRoutes()
-fun Route.alphaRoutes()
-fun Route.analyticsRoutes()
+// Route definitions (query/path params; no separate request DTOs)
+fun Application.configureRouting(...)
+fun Route.returnsRoutes(returnsService, maxStringLength)
+fun Route.alphaRoutes(alphaService, maxStringLength)
+fun Route.analyticsRoutes(analyticsService, defaultsConfig, maxStringLength)
 
-// Request/Response DTOs
-data class ReturnsRequest(...)
-data class ReturnsResponse(...)
-data class AlphaRequest(...)
-data class AlphaResponse(...)
+// Response models (serialized to JSON)
+data class Returns(symbol, fromDate, toDate, dailyReturns, metadata)
+data class Alpha(target, benchmark, fromDate, toDate, alpha, metadata)
+// Plus VolatilityResponse, SharpeResponse, BetaResponse, CorrelationResponse
 ```
 
 ### 2. Service Layer (`service` package)
@@ -95,18 +93,18 @@ interface ReturnsService {
 
 interface AlphaService {
     suspend fun calculateAlpha(
-        targetSymbol: String,
-        benchmarkSymbol: String,
+        target: String,
+        benchmark: String,
         fromDate: LocalDate,
         toDate: LocalDate
     ): Alpha
 }
 
 interface AnalyticsService {
-    suspend fun calculateVolatility(...)
-    suspend fun calculateSharpe(...)
-    suspend fun calculateBeta(...)
-    suspend fun calculateRollingCorrelation(...)
+    suspend fun calculateVolatility(symbol, fromDate, toDate): VolatilityResponse
+    suspend fun calculateSharpe(symbol, fromDate, toDate, riskFreeRate): SharpeResponse
+    suspend fun calculateBeta(target, benchmark, fromDate, toDate): BetaResponse
+    suspend fun calculateCorrelation(ticker1, ticker2, fromDate, toDate, window): CorrelationResponse
 }
 ```
 
@@ -121,16 +119,22 @@ interface AnalyticsService {
 ```kotlin
 object FinancialCalculations {
     fun calculateDailyReturns(prices: List<DailyPrice>): List<DailyReturn>
-    fun calculateAlpha(targetReturns: List<Double>, benchmarkReturns: List<Double>): Double
+    fun calculateAlpha(targetReturns: List<Double>, benchmarkReturns: List<Double>, tradingDays: Int = 252): Double
     fun calculateBeta(targetReturns: List<Double>, benchmarkReturns: List<Double>): Double
-    fun calculateVolatility(returns: List<Double>): Double
-    fun calculateSharpe(returns: List<Double>, riskFreeRate: Double): Double
-    fun calculateRollingCorrelation(series1: List<Double>, series2: List<Double>, window: Int): List<Double>
+    fun calculateVolatility(returns: List<Double>, tradingDays: Int = 252): Pair<Double, Double>  // daily, annualized
+    fun calculateSharpe(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double
     
-    // Helper functions
     fun annualizeReturn(avgDailyReturn: Double, tradingDays: Int = 252): Double
-    fun annualizeVolatility(dailyVolatility: Double, tradingDays: Int = 252): Double
 }
+object StatisticalCalculations {
+    fun mean(values: List<Double>): Double
+    fun variance(values: List<Double>): Double
+    fun standardDeviation(values: List<Double>): Double
+    fun covariance(series1: List<Double>, series2: List<Double>): Double
+    fun correlation(series1: List<Double>, series2: List<Double>): Double
+}
+```
+(Rolling correlation is implemented in AnalyticsServiceImpl using aligned returns and a window.)
 
 object StatisticalCalculations {
     fun mean(values: List<Double>): Double
@@ -155,20 +159,14 @@ interface MarketDataService {
         symbol: String,
         fromDate: LocalDate,
         toDate: LocalDate
-    ): Result<List<DailyPrice>>
-    
-    suspend fun validateSymbol(symbol: String): Boolean
+    ): List<DailyPrice>
 }
 
 // Implementations
-class AlphaVantageService(
-    private val apiKey: String,
-    private val httpClient: HttpClient,
-    private val cache: Cache<String, List<DailyPrice>>
-) : MarketDataService
-
+class AlphaVantageService(client, apiKey, baseUrl, ...) : MarketDataService
 class MockMarketDataService : MarketDataService
 ```
+(Symbol analytics are cached in SymbolAnalyticsCacheService (Caffeine), not in the data layer. Optional CachingMarketDataService wraps a MarketDataService with a price cache.)
 
 ### 5. Domain Models (`model` package)
 
@@ -208,99 +206,48 @@ data class Alpha(
 
 ### 6. Error Handling (`error` package)
 
-**Custom Exceptions**:
-```kotlin
-sealed class MeikenException(message: String) : Exception(message)
+**Custom Exceptions** (all extend RuntimeException; mapped in StatusPages):
+- `InvalidDateRangeException`, `BadRequestException` → 400
+- `SymbolNotFoundException` → 404
+- `DataRetrievalException`, `RetryExhaustedException` → 500 / 502
+- `ExternalServiceException` → 502
+- `CircuitBreakerOpenException` → 503
+- `TimeoutException` → 504
+- `UnauthorizedException` → 401
+- `RateLimitExceededException` → 429
 
-class InvalidDateRangeException(message: String) : MeikenException(message)
-class SymbolNotFoundException(symbol: String) : MeikenException("Symbol not found: $symbol")
-class DataRetrievalException(message: String) : MeikenException(message)
-class InsufficientDataException(message: String) : MeikenException(message)
-class CalculationException(message: String) : MeikenException(message)
-
-data class ErrorResponse(
-    val error: ErrorDetail
-)
-
-data class ErrorDetail(
-    val code: String,
-    val message: String,
-    val details: Map<String, Any>? = null
-)
-```
+**Response**:
+- `ErrorResponse(error: ErrorDetail)` with `code`, `message`, `details` (optional map)
 
 ---
 
-## Project Structure
+## Project Structure (high-level)
 
 ```
 meiken/
-├── docs/
-│   ├── SPEC.md
-│   ├── ARCHITECTURE.md
-│   ├── API.md (OpenAPI/Swagger)
-│   └── IMPLEMENTATION.md
-├── src/
-│   ├── main/
-│   │   ├── kotlin/
-│   │   │   └── com/meiken/
-│   │   │       ├── Application.kt (main entry point)
-│   │   │       ├── api/
-│   │   │       │   ├── Routes.kt
-│   │   │       │   ├── ReturnsRoutes.kt
-│   │   │       │   ├── AlphaRoutes.kt
-│   │   │       │   └── AnalyticsRoutes.kt
-│   │   │       ├── service/
-│   │   │       │   ├── ReturnsService.kt
-│   │   │       │   ├── ReturnsServiceImpl.kt
-│   │   │       │   ├── AlphaService.kt
-│   │   │       │   ├── AlphaServiceImpl.kt
-│   │   │       │   ├── AnalyticsService.kt
-│   │   │       │   └── AnalyticsServiceImpl.kt
-│   │   │       ├── calculator/
-│   │   │       │   ├── FinancialCalculations.kt
-│   │   │       │   └── StatisticalCalculations.kt
-│   │   │       ├── data/
-│   │   │       │   ├── MarketDataService.kt
-│   │   │       │   ├── AlphaVantageService.kt
-│   │   │       │   └── MockMarketDataService.kt
-│   │   │       ├── model/
-│   │   │       │   ├── DailyPrice.kt
-│   │   │       │   ├── DailyReturn.kt
-│   │   │       │   ├── Returns.kt
-│   │   │       │   ├── Alpha.kt
-│   │   │       │   └── Analytics.kt
-│   │   │       ├── error/
-│   │   │       │   ├── Exceptions.kt
-│   │   │       │   └── ErrorResponse.kt
-│   │   │       ├── config/
-│   │   │       │   └── AppConfig.kt
-│   │   │       └── util/
-│   │   │           ├── DateUtils.kt
-│   │   │           └── ValidationUtils.kt
-│   │   └── resources/
-│   │       ├── application.conf
-│   │       └── logback.xml
-│   └── test/
-│       ├── kotlin/
-│       │   └── com/meiken/
-│       │       ├── api/
-│       │       │   └── ReturnsRoutesTest.kt
-│       │       ├── service/
-│       │       │   └── ReturnsServiceTest.kt
-│       │       ├── calculator/
-│       │       │   └── FinancialCalculationsTest.kt
-│       │       └── data/
-│       │           └── AlphaVantageServiceTest.kt
-│       └── resources/
-│           └── test-data/
-│               └── sample-prices.json
-├── gradle/
+├── docs/           # SPEC.md, ARCHITECTURE.md, runbooks, BUILD.md, etc.
+├── src/main/kotlin/com/meiken/
+│   ├── Application.kt
+│   ├── api/        # Routes, ReturnsRoutes, AlphaRoutes, AnalyticsRoutes, Health
+│   ├── cache/      # SymbolAnalyticsCacheService
+│   ├── config/     # CacheConfig, ApiConfig, DateRangesConfig, ResilienceConfig, ...
+│   ├── calculator/ # FinancialCalculations, StatisticalCalculations
+│   ├── data/       # MarketDataService, AlphaVantageService, MockMarketDataService, Resilient*, Caching*
+│   ├── error/      # Exceptions, ErrorResponse
+│   ├── model/      # DailyPrice, DailyReturn, Returns, Alpha, *Response, *Metadata
+│   ├── observability/ # Metrics, ObservabilityPlugin
+│   ├── resilience/ # CircuitBreakerConfig, RetryConfig
+│   ├── security/   # InputValidator, SecurityConfig, ApiKeyAuth, RateLimiting, SecurityHeaders, TlsConfig
+│   ├── service/    # ReturnsService, AlphaService, AnalyticsService + Impls
+│   ├── util/       # DateUtils, MarketCalendar
+│   ├── validator/  # DataValidator
+│   └── lifecycle/  # ShutdownState
+├── src/main/resources/
+│   └── application.conf
+├── src/test/       # Unit and integration tests (config, api, service, data, calculator, ...)
 ├── build.gradle.kts
 ├── settings.gradle.kts
-├── gradlew
-├── gradlew.bat
-├── .gitignore
+├── gradlew / gradlew.bat
 └── README.md
 ```
 
