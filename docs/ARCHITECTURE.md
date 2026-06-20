@@ -1,4 +1,4 @@
-# Meiken - Architecture Design
+# Equity Analytics API - Architecture Design
 
 ## Technology Stack
 
@@ -407,9 +407,9 @@ Create realistic test datasets:
 ### Docker
 ```dockerfile
 FROM openjdk:17-alpine
-COPY build/libs/meiken-all.jar /app/meiken.jar
+COPY build/libs/equity-analytics-api-all.jar /app/app.jar
 EXPOSE 8080
-CMD ["java", "-jar", "/app/meiken.jar"]
+CMD ["java", "-jar", "/app/app.jar"]
 ```
 
 ### Environment Variables

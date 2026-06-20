@@ -25,7 +25,7 @@
 1. Create git tag: `git tag v1.2.3 && git push origin v1.2.3`
 2. CI builds and pushes Docker image
 3. Run: `./scripts/deploy-production.sh`
-4. Monitor deployment: `kubectl rollout status deployment/meiken`
+4. Monitor deployment: `kubectl rollout status deployment/equity-analytics-api`
 5. Run smoke tests: `./tests/smoke/smoke-test.sh https://api.example.com`
 6. Monitor metrics and logs for 30 minutes
 
@@ -42,7 +42,7 @@
 If issues detected:
 
 1. Run: `./scripts/rollback.sh`
-2. Verify rollback: `kubectl rollout status deployment/meiken`
+2. Verify rollback: `kubectl rollout status deployment/equity-analytics-api`
 3. Run smoke tests
 4. Investigate root cause
 5. Fix and redeploy

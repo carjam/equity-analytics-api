@@ -43,4 +43,14 @@ class ApplicationTest {
         val response = client.get("/api/v1/alpha")
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
+
+    @Test
+    fun `legal terms endpoint returns markdown`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/legal/terms")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        kotlin.test.assertTrue(body.contains("Terms of Service"), "Expected terms body, got: $body")
+    }
 }

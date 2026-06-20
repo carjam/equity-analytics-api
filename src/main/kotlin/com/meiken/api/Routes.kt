@@ -71,6 +71,7 @@ fun Application.configureRouting(
             val body = prometheusRegistry?.scrape() ?: ""
             call.respondText(body, ContentType.Text.Plain, HttpStatusCode.OK)
         }
+        legalRoutes()
         route("api/v1") {
             intercept(ApplicationCallPipeline.Call) {
                 call.response.headers.append("Cache-Control", "public, max-age=$cacheMaxAge")

@@ -1,4 +1,4 @@
-# Manual Test Validation for Meiken Financial Calculator
+# Manual Test Validation for Equity Analytics API Financial Calculator
 
 This document outlines all 8 test cases and their expected outcomes.
 

@@ -1,8 +1,8 @@
-# Meiken
+# Equity Analytics API
 
 A Kotlin/Ktor REST API for financial analytics: daily returns, alpha, volatility, beta, Sharpe ratio, and rolling correlation. Uses Alpha Vantage for real market data (or mock data when no API key is set).
 
-> **Portfolio Project:** Demonstration of production-grade financial analytics API engineering. Source code available for review only. See [LICENSE](LICENSE) and [docs/NOTICE.md](docs/NOTICE.md) for terms.
+> **Portfolio Project:** Demonstration of production-grade financial analytics API engineering. Source code available for review only. See [LICENSE](LICENSE) and [docs/NOTICE.md](docs/NOTICE.md) for terms. Repository: [github.com/carjam/equity-analytics-api](https://github.com/carjam/equity-analytics-api)
 
 **All calculations use close-of-day (close-of-date) prices only:** one price per calendar day per ticker (the daily closing price). Returns are day-over-day close-to-close; volatility, alpha, beta, Sharpe, and correlation are derived from those daily close-based returns.
 
@@ -333,11 +333,11 @@ The API uses **Resilience4j** for circuit breaker, retry, timeouts, and graceful
 
 ```bash
 # Build image
-docker build -t meiken:latest .
+docker build -t equity-analytics-api:latest .
 
 # Apply manifests (create secret for ALPHA_VANTAGE_API_KEY if needed)
 kubectl apply -f k8s/ConfigMap.yaml
-kubectl create secret generic meiken-secrets --from-literal=alpha-vantage-api-key=YOUR_KEY  # optional
+kubectl create secret generic equity-analytics-api-secrets --from-literal=alpha-vantage-api-key=YOUR_KEY  # optional
 kubectl apply -f k8s/Deployment.yaml
 kubectl apply -f k8s/Service.yaml
 kubectl apply -f k8s/HorizontalPodAutoscaler.yaml
@@ -371,17 +371,17 @@ Coverage: `build/reports/jacoco/test/html/index.html`
 Build (optionally pass API key at build time):
 
 ```bash
-docker build -t meiken .
+docker build -t equity-analytics-api .
 # With API key at build time (optional; prefer runtime -e for secrets):
-docker build --build-arg ALPHA_VANTAGE_API_KEY=your_key -t meiken .
+docker build --build-arg ALPHA_VANTAGE_API_KEY=your_key -t equity-analytics-api .
 ```
 
 Run (port 8080; pass API key at runtime for real data):
 
 ```bash
-docker run -p 8080:8080 meiken
+docker run -p 8080:8080 equity-analytics-api
 # With real data:
-docker run -p 8080:8080 -e ALPHA_VANTAGE_API_KEY=your_key meiken
+docker run -p 8080:8080 -e ALPHA_VANTAGE_API_KEY=your_key equity-analytics-api
 ```
 
 ## Monitoring and observability
@@ -398,7 +398,7 @@ The API exposes production-grade metrics and health for Prometheus and structure
 
 ```yaml
 scrape_configs:
-  - job_name: 'meiken'
+  - job_name: 'equity-analytics-api'
     metrics_path: /metrics
     static_configs:
       - targets: ['localhost:8080']
@@ -480,5 +480,7 @@ Additional docs (API spec, architecture, runbooks) are in **docs/**. See **[docs
 | [docs/NOTICE.md](docs/NOTICE.md) | Copyright and portfolio notice |
 | [docs/legal/TERMS_OF_SERVICE.md](docs/legal/TERMS_OF_SERVICE.md) | API terms of service |
 | [docs/legal/PRIVACY_POLICY.md](docs/legal/PRIVACY_POLICY.md) | Privacy policy |
+
+Legal documents are also served by the running API: `GET /legal`, `/legal/terms`, `/legal/privacy`, `/legal/notice`.
 
 **© 2024–2026 James Carson. All Rights Reserved.** Commercial or API licensing: jamescarson3rd@gmail.com

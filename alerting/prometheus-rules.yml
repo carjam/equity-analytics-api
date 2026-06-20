@@ -45,7 +45,7 @@ groups:
           severity: critical
         annotations:
           summary: "Service is down"
-          description: "Meiken service has been down for 1+ minute"
+          description: "Equity Analytics API service has been down for 1+ minute"
       
       - alert: LowCacheHitRate
         expr: cache_hit_rate < 0.5

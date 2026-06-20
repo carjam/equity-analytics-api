@@ -1,7 +1,7 @@
-# Meiken - Financial Analytics REST API Specification
+# Equity Analytics API - Financial Analytics REST API Specification
 
 ## Overview
-Meiken is a REST API for computing financial analytics on stock market data, including returns, alpha, and other performance metrics.
+Equity Analytics API is a REST API for computing financial analytics on stock market data, including returns, alpha, and other performance metrics.
 
 ## Core Requirements
 
@@ -230,6 +230,19 @@ interface MarketDataService {
 ### Implementations
 1. **AlphaVantageService**: Production implementation
 2. **MockMarketDataService**: For testing and development
+
+---
+
+## Legal Endpoints
+
+Public markdown documents (bundled from `docs/legal/` at build time):
+
+| Endpoint | Document |
+|----------|----------|
+| `GET /legal` | Index with links |
+| `GET /legal/terms` | Terms of Service |
+| `GET /legal/privacy` | Privacy Policy |
+| `GET /legal/notice` | Copyright and portfolio notice |
 
 ---
 

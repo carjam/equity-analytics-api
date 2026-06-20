@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: meiken
+  name: equity-analytics-api
   labels:
-    app: meiken
+    app: equity-analytics-api
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: meiken
+      app: equity-analytics-api
   template:
     metadata:
       labels:
-        app: meiken
+        app: equity-analytics-api
     spec:
       containers:
-        - name: meiken
-          image: meiken:latest
+        - name: equity-analytics-api
+          image: equity-analytics-api:latest
           ports:
             - containerPort: 8080
           env:
@@ -25,12 +25,12 @@ spec:
             - name: MEIKEN_ENVIRONMENT
               valueFrom:
                 configMapKeyRef:
-                  name: meiken-config
+                  name: equity-analytics-api-config
                   key: environment
             - name: ALPHA_VANTAGE_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: meiken-secrets
+                  name: equity-analytics-api-secrets
                   key: alpha-vantage-api-key
                   optional: true
           resources:

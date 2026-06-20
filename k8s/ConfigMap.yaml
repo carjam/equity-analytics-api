@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: meiken-config
+  name: equity-analytics-api-config
 data:
   environment: "production"
   # Override with env-specific values; used by Deployment envFrom or configMapKeyRef

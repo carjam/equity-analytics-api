@@ -2,7 +2,7 @@
 
 **Last updated:** June 20, 2026
 
-This Privacy Policy describes how James Carson ("**Operator**," "**we**," "**us**," or "**our**") collects, uses, and shares information when you use the Meiken financial analytics API and related websites or documentation (collectively, the "**Service**").
+This Privacy Policy describes how James Carson ("**Operator**," "**we**," "**us**," or "**our**") collects, uses, and shares information when you use the Equity Analytics API and related websites or documentation (collectively, the "**Service**").
 
 By using the Service, you acknowledge this Privacy Policy. If you do not agree, do not use the Service.
 

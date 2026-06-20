@@ -2,7 +2,7 @@
 
 **Last updated:** June 20, 2026
 
-These Terms of Service ("**Terms**") govern access to and use of the Meiken financial analytics API, any related websites, documentation, and services (collectively, the "**Service**") operated by James Carson ("**Operator**," "**we**," "**us**," or "**our**").
+These Terms of Service ("**Terms**") govern access to and use of the Equity Analytics API, any related websites, documentation, and services (collectively, the "**Service**") operated by James Carson ("**Operator**," "**we**," "**us**," or "**our**").
 
 By accessing or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 

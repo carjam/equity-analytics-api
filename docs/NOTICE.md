@@ -21,7 +21,7 @@ Start with [../README.md](../README.md), [SPEC.md](SPEC.md), and [ARCHITECTURE.m
 
 | Document | Purpose |
 |----------|---------|
-| [TERMS_OF_SERVICE.md](legal/TERMS_OF_SERVICE.md) | Terms governing use of the Meiken API and related services |
+| [TERMS_OF_SERVICE.md](legal/TERMS_OF_SERVICE.md) | Terms governing use of the Equity Analytics API and related services |
 | [PRIVACY_POLICY.md](legal/PRIVACY_POLICY.md) | How data is collected, used, and retained |
 | [LICENSE](../LICENSE) | Source code license (proprietary, view-only) |
 

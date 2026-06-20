@@ -59,4 +59,4 @@ jobs:
       if: github.ref == 'refs/heads/main'
       run: |
         echo "Would deploy to staging here"
-        # kubectl set image deployment/meiken meiken=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::7}
+        # kubectl set image deployment/equity-analytics-api equity-analytics-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::7}

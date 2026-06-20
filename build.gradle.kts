@@ -107,9 +107,19 @@ application {
     mainClass.set("com.meiken.ApplicationKt")
 }
 
+tasks.named<ProcessResources>("processResources") {
+    from("docs/legal") {
+        include("*.md")
+        into("legal")
+    }
+    from("docs/NOTICE.md") {
+        into("legal")
+    }
+}
+
 // Fat JAR for Docker (includes all dependencies)
 tasks.register<Jar>("fatJar") {
-    archiveBaseName.set("meiken")
+    archiveBaseName.set("equity-analytics-api")
     archiveClassifier.set("all")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {

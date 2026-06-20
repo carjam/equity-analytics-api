@@ -44,7 +44,7 @@
 
 ## Dashboard Locations
 
-- Grafana: https://grafana.example.com/d/meiken
+- Grafana: https://grafana.example.com/d/equity-analytics-api
 - Prometheus: https://prometheus.example.com
 - Logs: https://logs.example.com (Elasticsearch/Kibana or similar)
 

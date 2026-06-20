@@ -2,7 +2,7 @@
 
 | Document | Purpose |
 |----------|---------|
-| [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md) | Terms governing use of the Meiken API and related services |
+| [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md) | Terms governing use of the Equity Analytics API and related services |
 | [PRIVACY_POLICY.md](PRIVACY_POLICY.md) | Data collection, use, retention, and your rights |
 | [../NOTICE.md](../NOTICE.md) | Copyright notice and portfolio licensing summary |
 | [../../LICENSE](../../LICENSE) | Proprietary source code license |

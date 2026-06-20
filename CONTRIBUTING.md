@@ -1,12 +1,12 @@
-# Contributing to Meiken
+# Contributing to Equity Analytics API
 
 This is a **proprietary portfolio project**. Source code is view-only under [LICENSE](LICENSE). External contributions are welcome for review and discussion, but merging changes requires prior agreement with the copyright holder. See [docs/NOTICE.md](docs/NOTICE.md).
 
 ## Development Setup
 
 1. Clone repository:
-   git clone https://github.com/carjam/meiken.git
-   cd meiken
+   git clone https://github.com/carjam/equity-analytics-api.git
+   cd equity-analytics-api
 
 2. Install dependencies:
    - Java 17+

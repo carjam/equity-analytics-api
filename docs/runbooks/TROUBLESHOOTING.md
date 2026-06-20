@@ -16,7 +16,7 @@
 - If Alpha Vantage slow: Circuit breaker will open automatically
 - If low cache hit rate: Cache may have evicted - monitor memory
 - If specific endpoint slow: Check logs for that endpoint
-- Temporary: Scale up replicas: `kubectl scale deployment/meiken --replicas=5`
+- Temporary: Scale up replicas: `kubectl scale deployment/equity-analytics-api --replicas=5`
 
 ## High Error Rate
 
@@ -25,7 +25,7 @@
 - Alert: HighErrorRate
 
 ### Diagnosis
-1. Check which endpoint: Grafana or `kubectl logs -l app=meiken | grep ERROR`
+1. Check which endpoint: Grafana or `kubectl logs -l app=equity-analytics-api | grep ERROR`
 2. Check error types: 4xx vs 5xx
 3. Check circuit breaker: `/health`
 4. Check Alpha Vantage status
@@ -78,8 +78,8 @@
 - Health check failing
 
 ### Diagnosis
-1. Check pod status: `kubectl get pods -l app=meiken`
-2. Check pod logs: `kubectl logs -l app=meiken --tail=100`
+1. Check pod status: `kubectl get pods -l app=equity-analytics-api`
+2. Check pod logs: `kubectl logs -l app=equity-analytics-api --tail=100`
 3. Check events: `kubectl get events --sort-by='.lastTimestamp'`
 4. Check resource limits: `kubectl top pods`
 

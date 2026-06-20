@@ -10,5 +10,5 @@ fi
 echo "Deploying to production..."
 kubectl config use-context production
 kubectl apply -f k8s/
-kubectl rollout status deployment/meiken
+kubectl rollout status deployment/equity-analytics-api
 echo "Production deployment complete"

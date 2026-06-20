@@ -1,1 +1,1 @@
-rootProject.name = "meiken"
+rootProject.name = "equity-analytics-api"

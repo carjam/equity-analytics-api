@@ -1,4 +1,4 @@
-# Building and testing Meiken
+# Building and testing Equity Analytics API
 
 The project uses **Gradle** (Kotlin DSL). There is no Maven build.
 

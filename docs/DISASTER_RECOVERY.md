@@ -52,8 +52,8 @@ Time: ~10 minutes
 ### Partial Outage
 
 1. Rolling restart:
-   - `kubectl rollout restart deployment/meiken`
-   - Monitor: `kubectl rollout status deployment/meiken`
+   - `kubectl rollout restart deployment/equity-analytics-api`
+   - Monitor: `kubectl rollout status deployment/equity-analytics-api`
 
 Time: ~3 minutes
 
