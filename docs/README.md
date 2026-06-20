@@ -28,3 +28,12 @@ Keep these updated when procedures or tooling change.
 | **BUILD.md** | Build and troubleshooting. README has main build commands; use BUILD.md for deeper Gradle/IDE issues. |
 | **DIAGNOSTICS.md** | Diagnostic steps and test references. |
 | **VALIDATION.md** | Manual test cases for the calculator layer. Automated tests in `src/test` are the source of truth. |
+
+## Legal
+
+| Document | Purpose |
+|----------|--------|
+| **NOTICE.md** | Copyright, portfolio notice, and licensing summary |
+| **legal/TERMS_OF_SERVICE.md** | Terms governing API and service use |
+| **legal/PRIVACY_POLICY.md** | Data collection, use, and retention |
+| **[../LICENSE](../LICENSE)** | Proprietary source code license |

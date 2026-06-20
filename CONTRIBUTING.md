@@ -1,5 +1,7 @@
 # Contributing to Meiken
 
+This is a **proprietary portfolio project**. Source code is view-only under [LICENSE](LICENSE). External contributions are welcome for review and discussion, but merging changes requires prior agreement with the copyright holder. See [docs/NOTICE.md](docs/NOTICE.md).
+
 ## Development Setup
 
 1. Clone repository:
@@ -59,4 +61,4 @@ chore: Build/config changes
 
 ## Questions?
 
-Open an issue or discussion on GitHub
+Open an issue or discussion on GitHub, or email jamescarson3rd@gmail.com for licensing inquiries.

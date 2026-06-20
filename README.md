@@ -2,6 +2,8 @@
 
 A Kotlin/Ktor REST API for financial analytics: daily returns, alpha, volatility, beta, Sharpe ratio, and rolling correlation. Uses Alpha Vantage for real market data (or mock data when no API key is set).
 
+> **Portfolio Project:** Demonstration of production-grade financial analytics API engineering. Source code available for review only. See [LICENSE](LICENSE) and [docs/NOTICE.md](docs/NOTICE.md) for terms.
+
 **All calculations use close-of-day (close-of-date) prices only:** one price per calendar day per ticker (the daily closing price). Returns are day-over-day close-to-close; volatility, alpha, beta, Sharpe, and correlation are derived from those daily close-based returns.
 
 ## Quick Start
@@ -470,6 +472,13 @@ scrape_configs:
 
 Additional docs (API spec, architecture, runbooks) are in **docs/**. See **[docs/README.md](docs/README.md)** for an index and which documents are maintained vs historical.
 
-## License
+## License and legal
 
-See repository license.
+| Document | Description |
+|----------|-------------|
+| [LICENSE](LICENSE) | Proprietary source code license (view-only) |
+| [docs/NOTICE.md](docs/NOTICE.md) | Copyright and portfolio notice |
+| [docs/legal/TERMS_OF_SERVICE.md](docs/legal/TERMS_OF_SERVICE.md) | API terms of service |
+| [docs/legal/PRIVACY_POLICY.md](docs/legal/PRIVACY_POLICY.md) | Privacy policy |
+
+**© 2024–2026 James Carson. All Rights Reserved.** Commercial or API licensing: jamescarson3rd@gmail.com
