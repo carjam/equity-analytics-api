@@ -190,9 +190,12 @@ fun Application.module() {
 
     val securityConfig = SecurityConfig.from(environment.config)
     val tlsConfig = TlsConfig.from(environment.config)
+    val startupLog = LoggerFactory.getLogger("com.meiken.Application")
     if (!tlsConfig.isConfigured) {
-        LoggerFactory.getLogger("com.meiken.Application")
-            .warn("SSL/TLS not configured (no KEY_STORE_PATH); running in HTTP-only development mode. For production, use a reverse proxy for HTTPS.")
+        startupLog.warn("SSL/TLS not configured (no KEY_STORE_PATH); running in HTTP-only development mode. For production, use a reverse proxy for HTTPS.")
+    }
+    if (!securityConfig.apiKeysEnabled) {
+        startupLog.warn("API key authentication is DISABLED. All /api/v1/** endpoints are publicly accessible. Set API_KEYS_ENABLED=true and VALID_API_KEYS before exposing this service externally.")
     }
     install(createSecurityHeadersPlugin(addHsts = securityConfig.requireHttps))
     installRateLimiting(
