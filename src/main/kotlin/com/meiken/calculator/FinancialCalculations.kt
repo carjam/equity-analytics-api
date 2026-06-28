@@ -255,4 +255,27 @@ object FinancialCalculations {
             distanceFromLow = distanceFromLow
         )
     }
+
+    /**
+     * Z-Score: measures how many standard deviations the current price is from the mean.
+     * z = (current_price - mean_price) / std_dev_price
+     * Useful for mean reversion strategies: |z| > 2 suggests overbought/oversold conditions.
+     */
+    fun calculateZScore(prices: List<DailyPrice>, window: Int): Double {
+        require(prices.isNotEmpty()) { "Cannot calculate Z-score with empty price list" }
+        require(window >= 2) { "Window must be at least 2" }
+        require(prices.size >= window) { "Need at least $window prices for Z-score calculation" }
+        
+        val sortedPrices = prices.sortedBy { it.date }
+        val recentPrices = sortedPrices.takeLast(window)
+        
+        val priceValues = recentPrices.map { it.close }
+        val mean = priceValues.average()
+        val stdDev = StatisticalCalculations.standardDeviation(priceValues)
+        
+        require(stdDev != 0.0) { "Standard deviation cannot be zero for Z-score calculation" }
+        
+        val currentPrice = sortedPrices.last().close
+        return (currentPrice - mean) / stdDev
+    }
 }

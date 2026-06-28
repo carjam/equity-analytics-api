@@ -638,4 +638,75 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculate52WeekLevels(emptyList())
         }
     }
+
+    @Test
+    fun `calculateZScore with mean-reverting price`() {
+        // Price oscillates around 100: 95, 100, 105, 100, 95, 100, 90 (last is 2 std devs below mean)
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 95.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 105.0),
+            DailyPrice(LocalDate(2024, 1, 4), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 5), close = 95.0),
+            DailyPrice(LocalDate(2024, 1, 6), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 7), close = 90.0)
+        )
+        
+        val zScore = FinancialCalculations.calculateZScore(prices, window = 6)
+        
+        // Z-score should be negative (below mean)
+        assert(zScore < 0.0) { "Z-score should be negative when price is below mean" }
+    }
+
+    @Test
+    fun `calculateZScore with price at mean returns zero`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 95.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 105.0),
+            DailyPrice(LocalDate(2024, 1, 4), close = 100.0)  // Mean = 100
+        )
+        
+        val zScore = FinancialCalculations.calculateZScore(prices, window = 4)
+        
+        assertEquals(0.0, zScore, 0.0001)
+    }
+
+    @Test
+    fun `calculateZScore with price above mean returns positive`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 95.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 105.0),
+            DailyPrice(LocalDate(2024, 1, 4), close = 110.0)  // Above mean
+        )
+        
+        val zScore = FinancialCalculations.calculateZScore(prices, window = 4)
+        
+        assert(zScore > 0.0) { "Z-score should be positive when price is above mean" }
+    }
+
+    @Test
+    fun `calculateZScore throws when window exceeds prices`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateZScore(prices, window = 10)
+        }
+    }
+
+    @Test
+    fun `calculateZScore throws with invalid window`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateZScore(prices, window = 1)
+        }
+    }
 }

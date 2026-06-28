@@ -29,6 +29,8 @@ import com.meiken.model.SortinoResponse
 import com.meiken.model.VolatilityData
 import com.meiken.model.VolatilityMetadata
 import com.meiken.model.VolatilityResponse
+import com.meiken.model.ZScoreMetadata
+import com.meiken.model.ZScoreResponse
 import com.meiken.util.validateDateRange
 import com.meiken.validator.OutputValidator
 import kotlinx.coroutines.async
@@ -329,6 +331,50 @@ class AnalyticsServiceImpl(
                 distanceFromLow = result.distanceFromLow
             ),
             metadata = PriceLevelsMetadata(
+                dataPoints = analytics.dailyPrices.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = analytics.warnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Z-Score from cached prices: number of standard deviations from mean price over window. Mean reversion indicator. */
+    override suspend fun calculateZScore(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        window: Int
+    ): ZScoreResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        require(window >= 2) { "Window must be at least 2" }
+        
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyPrices.isNotEmpty()) { "No price data available for Z-score calculation" }
+        require(analytics.dailyPrices.size >= window) {
+            "Need at least $window price points for Z-score calculation"
+        }
+        
+        val zScore = FinancialCalculations.calculateZScore(analytics.dailyPrices, window)
+        
+        // Calculate mean and std dev for response
+        val recentPrices = analytics.dailyPrices.sortedBy { it.date }.takeLast(window)
+        val priceValues = recentPrices.map { it.close }
+        val mean = priceValues.average()
+        val stdDev = StatisticalCalculations.standardDeviation(priceValues)
+        
+        ZScoreResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            zScore = zScore,
+            currentPrice = analytics.dailyPrices.sortedBy { it.date }.last().close,
+            meanPrice = mean,
+            stdDev = stdDev,
+            window = window,
+            metadata = ZScoreMetadata(
                 dataPoints = analytics.dailyPrices.size,
                 source = DEFAULT_SOURCE,
                 dataQuality = analytics.dataQuality,

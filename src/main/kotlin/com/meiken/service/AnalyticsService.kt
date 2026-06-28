@@ -9,9 +9,10 @@ import com.meiken.model.MovingAverageResponse
 import com.meiken.model.SharpeResponse
 import com.meiken.model.SortinoResponse
 import com.meiken.model.VolatilityResponse
+import com.meiken.model.ZScoreResponse
 import kotlinx.datetime.LocalDate
 
-/** Service for volatility, beta, Sharpe ratio, Sortino ratio, Calmar ratio, momentum, moving averages, drawdown, and rolling correlation analytics. All metrics use close-of-day prices only. */
+/** Service for volatility, beta, Sharpe ratio, Sortino ratio, Calmar ratio, momentum, moving averages, price levels, Z-score, drawdown, and rolling correlation analytics. All metrics use close-of-day prices only. */
 interface AnalyticsService {
     /** Daily and annualized volatility (std dev of close-to-close daily returns) for the symbol. */
     suspend fun calculateVolatility(symbol: String, fromDate: LocalDate, toDate: LocalDate): VolatilityResponse
@@ -29,6 +30,8 @@ interface AnalyticsService {
     suspend fun calculateMovingAverages(symbol: String, fromDate: LocalDate, toDate: LocalDate, windows: List<Int>): MovingAverageResponse
     /** Price levels: 52-week high/low and distance from current price. */
     suspend fun calculatePriceLevels(symbol: String, fromDate: LocalDate, toDate: LocalDate): com.meiken.model.PriceLevelsResponse
+    /** Z-Score: standard deviations from mean price over window (mean reversion indicator). */
+    suspend fun calculateZScore(symbol: String, fromDate: LocalDate, toDate: LocalDate, window: Int): ZScoreResponse
     /** Rolling correlation from close-of-day returns: for each window, correlation of the two return series; date = end of window. */
     suspend fun calculateCorrelation(ticker1: String, ticker2: String, fromDate: LocalDate, toDate: LocalDate, window: Int): CorrelationResponse
     /** Maximum drawdown: largest peak-to-trough decline as percentage from close prices. */

@@ -22,6 +22,7 @@ import io.ktor.server.routing.route
  * - GET tickers/{symbol}/momentum (optional from_date, to_date, lookback; default lookback=20; supports comma-separated list)
  * - GET tickers/{symbol}/moving-averages (optional from_date, to_date, window; default window=20,50,200; supports comma-separated list)
  * - GET tickers/{symbol}/price-levels (optional from_date, to_date; default YTD; 52-week high/low)
+ * - GET tickers/{symbol}/z-score (optional from_date, to_date, window; default window=60)
  * - GET tickers/{symbol}/drawdown (optional from_date, to_date; default YTD)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET correlation?ticker1=&ticker2= (optional from_date, to_date, window; default window from config)
@@ -140,6 +141,21 @@ fun Route.analyticsRoutes(
                     val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
                         ?: getToday()
                     val response = analyticsService.calculatePriceLevels(symbol, fromDate, toDate)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+            }
+            route("z-score") {
+                get {
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                        ?: getCurrentYearStart()
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                        ?: getToday()
+                    val window = call.request.queryParameters["window"]?.toIntOrNull() ?: 60
+                    if (window < 2 || window > 252) {
+                        throw BadRequestException("Window must be between 2 and 252 trading days")
+                    }
+                    val response = analyticsService.calculateZScore(symbol, fromDate, toDate, window)
                     call.respond(HttpStatusCode.OK, response)
                 }
             }
