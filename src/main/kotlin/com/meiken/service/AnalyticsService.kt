@@ -27,6 +27,8 @@ interface AnalyticsService {
     suspend fun calculateMomentum(symbol: String, fromDate: LocalDate, toDate: LocalDate, lookbacks: List<Int>): MomentumResponse
     /** Moving averages: simple moving average over multiple window sizes. */
     suspend fun calculateMovingAverages(symbol: String, fromDate: LocalDate, toDate: LocalDate, windows: List<Int>): MovingAverageResponse
+    /** Price levels: 52-week high/low and distance from current price. */
+    suspend fun calculatePriceLevels(symbol: String, fromDate: LocalDate, toDate: LocalDate): com.meiken.model.PriceLevelsResponse
     /** Rolling correlation from close-of-day returns: for each window, correlation of the two return series; date = end of window. */
     suspend fun calculateCorrelation(ticker1: String, ticker2: String, fromDate: LocalDate, toDate: LocalDate, window: Int): CorrelationResponse
     /** Maximum drawdown: largest peak-to-trough decline as percentage from close prices. */

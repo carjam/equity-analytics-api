@@ -560,4 +560,82 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculateMovingAverage(prices, window = 0)
         }
     }
+
+    @Test
+    fun `calculate52WeekLevels with full year of data`() {
+        // Create 260 days of prices ranging from 90 to 110
+        val prices = (1..260).map { day ->
+            val price = 100.0 + 10.0 * kotlin.math.sin(day / 40.0)  // oscillate between 90-110
+            DailyPrice(LocalDate(2024, 1, 1), close = price)
+        }
+        
+        val levels = FinancialCalculations.calculate52WeekLevels(prices)
+        
+        assertEquals(prices.last().close, levels.current, 0.0001)
+        assert(levels.high52Week >= levels.current) { "52w high should be >= current" }
+        assert(levels.low52Week <= levels.current) { "52w low should be <= current" }
+        assert(levels.distanceFromHigh <= 0.0) { "Distance from high should be <= 0" }
+        assert(levels.distanceFromLow >= 0.0) { "Distance from low should be >= 0" }
+    }
+
+    @Test
+    fun `calculate52WeekLevels with price at 52w high`() {
+        // Simple steadily increasing prices
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 110.0),
+            DailyPrice(LocalDate(2024, 1, 4), close = 115.0),
+            DailyPrice(LocalDate(2024, 1, 5), close = 120.0)
+        )
+        
+        val levels = FinancialCalculations.calculate52WeekLevels(prices)
+        
+        // Current price should be the 52w high
+        assertEquals(120.0, levels.current, 0.0001)
+        assertEquals(120.0, levels.high52Week, 0.0001)
+        assertEquals(100.0, levels.low52Week, 0.0001)
+        assertEquals(0.0, levels.distanceFromHigh, 0.0001)
+        assert(levels.distanceFromLow > 0.0) { "Should be above 52w low" }
+    }
+
+    @Test
+    fun `calculate52WeekLevels with price at 52w low`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 120.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 115.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 110.0),
+            DailyPrice(LocalDate(2024, 1, 4), close = 105.0),
+            DailyPrice(LocalDate(2024, 1, 5), close = 100.0)
+        )
+        
+        val levels = FinancialCalculations.calculate52WeekLevels(prices)
+        
+        // Current price should be the 52w low
+        assertEquals(100.0, levels.current, 0.0001)
+        assertEquals(120.0, levels.high52Week, 0.0001)
+        assertEquals(100.0, levels.low52Week, 0.0001)
+        assertEquals(0.0, levels.distanceFromLow, 0.0001)
+        assert(levels.distanceFromHigh < 0.0) { "Should be below 52w high" }
+    }
+
+    @Test
+    fun `calculate52WeekLevels with less than 252 days uses all available`() {
+        val prices = (1..28).map { day ->
+            DailyPrice(LocalDate(2024, 1, day), close = 100.0 + day * 0.5)
+        }
+        
+        val levels = FinancialCalculations.calculate52WeekLevels(prices)
+        
+        // Should use all 28 days
+        assertEquals(prices.maxOf { it.close }, levels.high52Week, 0.0001)
+        assertEquals(prices.minOf { it.close }, levels.low52Week, 0.0001)
+    }
+
+    @Test
+    fun `calculate52WeekLevels throws with empty list`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculate52WeekLevels(emptyList())
+        }
+    }
 }

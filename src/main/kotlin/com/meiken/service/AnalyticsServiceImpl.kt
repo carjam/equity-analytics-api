@@ -18,6 +18,9 @@ import com.meiken.model.MomentumMetadata
 import com.meiken.model.MomentumResponse
 import com.meiken.model.MovingAverageMetadata
 import com.meiken.model.MovingAverageResponse
+import com.meiken.model.PriceLevels
+import com.meiken.model.PriceLevelsMetadata
+import com.meiken.model.PriceLevelsResponse
 import com.meiken.model.RollingCorrelation
 import com.meiken.model.SharpeMetadata
 import com.meiken.model.SharpeResponse
@@ -290,6 +293,43 @@ class AnalyticsServiceImpl(
             metadata = MovingAverageMetadata(
                 dataPoints = analytics.dailyPrices.size,
                 windows = windows,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = analytics.warnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Price Levels from cached prices: calculates 52-week high/low and distance from current. */
+    override suspend fun calculatePriceLevels(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): PriceLevelsResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyPrices.isNotEmpty()) { "No price data available for price levels calculation" }
+        
+        val result = FinancialCalculations.calculate52WeekLevels(analytics.dailyPrices)
+        
+        PriceLevelsResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            levels = PriceLevels(
+                current = result.current,
+                currentDate = result.currentDate,
+                high52Week = result.high52Week,
+                high52WeekDate = result.high52WeekDate,
+                low52Week = result.low52Week,
+                low52WeekDate = result.low52WeekDate,
+                distanceFromHigh = result.distanceFromHigh,
+                distanceFromLow = result.distanceFromLow
+            ),
+            metadata = PriceLevelsMetadata(
+                dataPoints = analytics.dailyPrices.size,
                 source = DEFAULT_SOURCE,
                 dataQuality = analytics.dataQuality,
                 outlierCount = analytics.outlierCount,

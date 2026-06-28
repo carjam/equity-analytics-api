@@ -21,6 +21,7 @@ import io.ktor.server.routing.route
  * - GET tickers/{symbol}/calmar (optional from_date, to_date; default YTD)
  * - GET tickers/{symbol}/momentum (optional from_date, to_date, lookback; default lookback=20; supports comma-separated list)
  * - GET tickers/{symbol}/moving-averages (optional from_date, to_date, window; default window=20,50,200; supports comma-separated list)
+ * - GET tickers/{symbol}/price-levels (optional from_date, to_date; default YTD; 52-week high/low)
  * - GET tickers/{symbol}/drawdown (optional from_date, to_date; default YTD)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET correlation?ticker1=&ticker2= (optional from_date, to_date, window; default window from config)
@@ -128,6 +129,17 @@ fun Route.analyticsRoutes(
                     }
                     
                     val response = analyticsService.calculateMovingAverages(symbol, fromDate, toDate, windows)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+            }
+            route("price-levels") {
+                get {
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                        ?: getCurrentYearStart()
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                        ?: getToday()
+                    val response = analyticsService.calculatePriceLevels(symbol, fromDate, toDate)
                     call.respond(HttpStatusCode.OK, response)
                 }
             }

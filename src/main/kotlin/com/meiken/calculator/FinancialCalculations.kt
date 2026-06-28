@@ -4,11 +4,12 @@ import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
 import com.meiken.model.MaxDrawdownResult
 import com.meiken.model.MovingAverageData
+import com.meiken.model.PriceLevelsResult
 import com.meiken.model.RateOfChangeData
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe, drawdown, momentum, moving averages. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
+/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe, drawdown, momentum, moving averages, price levels. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
 object FinancialCalculations {
 
     /** Converts sorted close-of-day prices to daily returns: (curr.close - prev.close) / prev.close per pair of consecutive days. One return per date (close-to-close). */
@@ -220,5 +221,38 @@ object FinancialCalculations {
         }
         
         return result
+    }
+
+    /**
+     * 52-Week High/Low Levels: identifies highest and lowest prices in the last 252 trading days (or all available data if less).
+     * Calculates distance from current price to these levels as percentages.
+     * Useful for breakout/oversold detection.
+     */
+    fun calculate52WeekLevels(prices: List<DailyPrice>): PriceLevelsResult {
+        require(prices.isNotEmpty()) { "Cannot calculate price levels with empty price list" }
+        
+        val sortedPrices = prices.sortedBy { it.date }
+        val current = sortedPrices.last()
+        
+        // Use last 252 trading days (52 weeks * 5 days) or all available data
+        val lookbackWindow = minOf(252, sortedPrices.size)
+        val recentPrices = sortedPrices.takeLast(lookbackWindow)
+        
+        val highPrice = recentPrices.maxByOrNull { it.close }!!
+        val lowPrice = recentPrices.minByOrNull { it.close }!!
+        
+        val distanceFromHigh = (current.close - highPrice.close) / highPrice.close
+        val distanceFromLow = (current.close - lowPrice.close) / lowPrice.close
+        
+        return PriceLevelsResult(
+            current = current.close,
+            currentDate = current.date,
+            high52Week = highPrice.close,
+            high52WeekDate = highPrice.date,
+            low52Week = lowPrice.close,
+            low52WeekDate = lowPrice.date,
+            distanceFromHigh = distanceFromHigh,
+            distanceFromLow = distanceFromLow
+        )
     }
 }
