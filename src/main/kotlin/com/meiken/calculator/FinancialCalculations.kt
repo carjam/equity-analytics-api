@@ -21,12 +21,26 @@ object FinancialCalculations {
         return (1 + avgDailyReturn).pow(tradingDays.toDouble()) - 1
     }
 
-    /** Alpha = annualized target return minus annualized benchmark return (excess return). Expects daily returns derived from close-of-day prices. */
-    fun calculateAlpha(targetReturns: List<Double>, benchmarkReturns: List<Double>, tradingDays: Int = 252): Double {
+    /**
+     * Jensen's alpha via OLS single-factor regression: (target − rf) = α + β(benchmark − rf) + ε.
+     * Returns Pair(annualizedAlpha, beta). Since RF is a constant daily shift it cancels in covariance
+     * and variance, so β = cov(target, benchmark) / var(benchmark), then:
+     *   α_daily = mean(target) − β × mean(benchmark) − rf_daily × (1 − β)
+     * where rf_daily = (1 + riskFreeRate)^(1/tradingDays) − 1. Alpha is then annualized.
+     */
+    fun calculateAlpha(
+        targetReturns: List<Double>,
+        benchmarkReturns: List<Double>,
+        riskFreeRate: Double = 0.04,
+        tradingDays: Int = 252
+    ): Pair<Double, Double> {
         require(targetReturns.size == benchmarkReturns.size) { "Must have same number of returns" }
-        val targetAnnualized = annualizeReturn(targetReturns.average(), tradingDays)
-        val benchmarkAnnualized = annualizeReturn(benchmarkReturns.average(), tradingDays)
-        return targetAnnualized - benchmarkAnnualized
+        val benchmarkVar = StatisticalCalculations.variance(benchmarkReturns)
+        require(benchmarkVar != 0.0) { "Benchmark variance cannot be zero" }
+        val beta = StatisticalCalculations.covariance(targetReturns, benchmarkReturns) / benchmarkVar
+        val rfDaily = (1.0 + riskFreeRate).pow(1.0 / tradingDays) - 1.0
+        val dailyAlpha = targetReturns.average() - beta * benchmarkReturns.average() - rfDaily * (1.0 - beta)
+        return Pair(annualizeReturn(dailyAlpha, tradingDays), beta)
     }
 
     /** Beta = covariance(target, benchmark) / variance(benchmark). Expects daily returns from close-of-day prices. Fails if benchmark variance is zero. */

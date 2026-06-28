@@ -88,7 +88,7 @@ fun Application.configureRouting(
             }
             rateLimit(RateLimitName("api")) {
                 returnsRoutes(returnsService, maxStringLength)
-                alphaRoutes(alphaService, maxStringLength)
+                alphaRoutes(alphaService, defaultsConfig, maxStringLength)
                 analyticsRoutes(analyticsService, defaultsConfig, maxStringLength)
             }
         }

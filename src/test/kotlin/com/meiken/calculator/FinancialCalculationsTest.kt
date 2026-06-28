@@ -74,19 +74,39 @@ class FinancialCalculationsTest {
     }
 
     @Test
-    fun `calculateAlpha with known values`() {
-        // Target: consistent 0.1% daily return
-        val targetReturns = List(252) { 0.001 }
-        
-        // Benchmark: consistent 0.08% daily return
-        val benchmarkReturns = List(252) { 0.0008 }
+    fun `calculateAlpha returns jensens alpha and beta`() {
+        // Target = benchmark + 0.001 each day → beta=1.0, daily alpha=0.001
+        val benchmarkReturns = listOf(0.01, -0.005, 0.02, -0.01, 0.005, -0.015, 0.03)
+        val targetReturns = benchmarkReturns.map { it + 0.001 }
 
-        val alpha = FinancialCalculations.calculateAlpha(targetReturns, benchmarkReturns, 252)
+        val (alpha, beta) = FinancialCalculations.calculateAlpha(targetReturns, benchmarkReturns, riskFreeRate = 0.0)
 
-        // Target annualized: ~28.72%
-        // Benchmark annualized: ~23.29%
-        // Alpha: ~5.43%
-        assertEquals(0.0543, alpha, 0.01)
+        // Beta=1 because target moves in lockstep with benchmark
+        assertEquals(1.0, beta, 0.0001)
+        // Daily alpha=0.001; annualized: (1.001)^252 - 1 ≈ 0.2872
+        assertEquals(0.2872, alpha, 0.01)
+    }
+
+    @Test
+    fun `calculateAlpha removes beta-driven return leaving true skill`() {
+        // Target = 2 * benchmark, rf=0 → beta=2, alpha=0 (outperformance is purely systematic)
+        val benchmarkReturns = listOf(0.01, -0.01, 0.02, -0.02, 0.01, -0.01)
+        val targetReturns = benchmarkReturns.map { it * 2.0 }
+
+        val (alpha, beta) = FinancialCalculations.calculateAlpha(targetReturns, benchmarkReturns, riskFreeRate = 0.0)
+
+        assertEquals(2.0, beta, 0.0001)
+        assertEquals(0.0, alpha, 0.001)
+    }
+
+    @Test
+    fun `calculateAlpha throws when benchmark variance is zero`() {
+        val targetReturns = listOf(0.01, 0.02, -0.01)
+        val constantBenchmark = listOf(0.008, 0.008, 0.008)
+
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateAlpha(targetReturns, constantBenchmark)
+        }
     }
 
     @Test
@@ -106,11 +126,12 @@ class FinancialCalculationsTest {
     }
 
     @Test
-    fun `calculateAlpha with default trading days`() {
-        val targetReturns = List(252) { 0.001 }
-        val benchmarkReturns = List(252) { 0.0008 }
-        val alpha = FinancialCalculations.calculateAlpha(targetReturns, benchmarkReturns)
-        assertEquals(0.0543, alpha, 0.01)
+    fun `calculateAlpha with default risk free rate returns pair`() {
+        val benchmarkReturns = listOf(0.01, -0.005, 0.02, -0.01, 0.005)
+        val targetReturns = benchmarkReturns.map { it + 0.001 }
+        val (alpha, beta) = FinancialCalculations.calculateAlpha(targetReturns, benchmarkReturns)
+        assertEquals(1.0, beta, 0.0001)
+        assert(alpha.isFinite())
     }
 
     @Test

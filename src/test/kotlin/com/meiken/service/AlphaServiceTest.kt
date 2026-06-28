@@ -32,7 +32,9 @@ class AlphaServiceTest {
         assertEquals(from, result.fromDate)
         assertEquals(to, result.toDate)
         assertTrue(result.metadata.dataPoints > 0)
-        assertEquals("annualized_excess_return", result.metadata.calculationMethod)
+        assertEquals("jensens_alpha_ols", result.metadata.calculationMethod)
+        assertTrue(result.metadata.riskFreeRate == 0.04)
+        assertTrue(result.metadata.beta.isFinite())
     }
 
     @Test

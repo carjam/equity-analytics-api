@@ -26,12 +26,13 @@ class AlphaServiceImpl(
     private val tradingDaysPerYear: Int = 252
 ) : AlphaService {
 
-    /** Computes alpha from cached close-of-day returns for target and benchmark (close-to-close daily returns). */
+    /** Computes Jensen's alpha via OLS regression of excess returns (target − rf) on (benchmark − rf). */
     override suspend fun calculateAlpha(
         target: String,
         benchmark: String,
         fromDate: LocalDate,
-        toDate: LocalDate
+        toDate: LocalDate,
+        riskFreeRate: Double
     ): Alpha = coroutineScope {
         validateDateRange(fromDate, toDate, maxDays)
 
@@ -57,7 +58,7 @@ class AlphaServiceImpl(
 
         val targetValues = alignedTarget.map { it.returnValue }
         val benchmarkValues = alignedBenchmark.map { it.returnValue }
-        val alphaValue = FinancialCalculations.calculateAlpha(targetValues, benchmarkValues, tradingDaysPerYear)
+        val (alphaValue, beta) = FinancialCalculations.calculateAlpha(targetValues, benchmarkValues, riskFreeRate, tradingDaysPerYear)
         val targetAnnualized = FinancialCalculations.annualizeReturn(targetValues.average(), tradingDaysPerYear)
         val benchmarkAnnualized = FinancialCalculations.annualizeReturn(benchmarkValues.average(), tradingDaysPerYear)
 
@@ -74,7 +75,8 @@ class AlphaServiceImpl(
             alpha = alphaValue,
             metadata = AlphaMetadata(
                 dataPoints = alignedTarget.size,
-                calculationMethod = "annualized_excess_return",
+                riskFreeRate = riskFreeRate,
+                beta = beta,
                 targetAnnualizedReturn = targetAnnualized,
                 benchmarkAnnualizedReturn = benchmarkAnnualized,
                 dataQuality = worstQuality,
