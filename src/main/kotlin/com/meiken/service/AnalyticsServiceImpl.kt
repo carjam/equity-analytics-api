@@ -16,6 +16,8 @@ import com.meiken.model.DrawdownMetadata
 import com.meiken.model.DrawdownResponse
 import com.meiken.model.MomentumMetadata
 import com.meiken.model.MomentumResponse
+import com.meiken.model.MovingAverageMetadata
+import com.meiken.model.MovingAverageResponse
 import com.meiken.model.RollingCorrelation
 import com.meiken.model.SharpeMetadata
 import com.meiken.model.SharpeResponse
@@ -247,6 +249,47 @@ class AnalyticsServiceImpl(
             metadata = MomentumMetadata(
                 dataPoints = analytics.dailyPrices.size,
                 lookbacks = lookbacks,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = analytics.warnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Moving Averages from cached prices: calculates SMA for multiple window sizes. */
+    override suspend fun calculateMovingAverages(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        windows: List<Int>
+    ): MovingAverageResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        require(windows.isNotEmpty()) { "At least one window size is required" }
+        require(windows.all { it > 0 }) { "All window sizes must be positive" }
+        
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyPrices.isNotEmpty()) { "No price data available for moving average calculation" }
+        
+        val maxWindow = windows.maxOrNull() ?: 0
+        require(analytics.dailyPrices.size >= maxWindow) {
+            "Need at least $maxWindow price points for the requested window sizes"
+        }
+        
+        // Calculate MA for all window sizes and combine
+        val allMaData = windows.flatMap { window ->
+            FinancialCalculations.calculateMovingAverage(analytics.dailyPrices, window)
+        }
+        
+        MovingAverageResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            movingAverages = allMaData,
+            metadata = MovingAverageMetadata(
+                dataPoints = analytics.dailyPrices.size,
+                windows = windows,
                 source = DEFAULT_SOURCE,
                 dataQuality = analytics.dataQuality,
                 outlierCount = analytics.outlierCount,

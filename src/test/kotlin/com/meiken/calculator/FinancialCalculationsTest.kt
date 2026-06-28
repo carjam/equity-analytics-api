@@ -486,4 +486,78 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculateRateOfChange(prices, lookback = 0)
         }
     }
+
+    @Test
+    fun `calculateMovingAverage with simple prices`() {
+        // Prices: 100, 110, 120, 130, 140
+        val prices = (1..5).map { day ->
+            DailyPrice(LocalDate(2024, 1, day), close = 90.0 + day * 10.0)
+        }
+        
+        val ma = FinancialCalculations.calculateMovingAverage(prices, window = 3)
+        
+        // Should have 3 MA values (5 prices - 3 window + 1)
+        assertEquals(3, ma.size)
+        // First MA (days 1-3): (100 + 110 + 120) / 3 = 110
+        assertEquals(110.0, ma[0].average, 0.0001)
+        assertEquals(LocalDate(2024, 1, 3), ma[0].date)
+        // Second MA (days 2-4): (110 + 120 + 130) / 3 = 120
+        assertEquals(120.0, ma[1].average, 0.0001)
+        // Third MA (days 3-5): (120 + 130 + 140) / 3 = 130
+        assertEquals(130.0, ma[2].average, 0.0001)
+    }
+
+    @Test
+    fun `calculateMovingAverage with window 1 returns original prices`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 110.0)
+        )
+        
+        val ma = FinancialCalculations.calculateMovingAverage(prices, window = 1)
+        
+        assertEquals(3, ma.size)
+        assertEquals(100.0, ma[0].average, 0.0001)
+        assertEquals(105.0, ma[1].average, 0.0001)
+        assertEquals(110.0, ma[2].average, 0.0001)
+    }
+
+    @Test
+    fun `calculateMovingAverage smooths volatile prices`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 120.0),  // spike
+            DailyPrice(LocalDate(2024, 1, 3), close = 105.0)
+        )
+        
+        val ma = FinancialCalculations.calculateMovingAverage(prices, window = 3)
+        
+        assertEquals(1, ma.size)
+        // MA smooths the spike: (100 + 120 + 105) / 3 = 108.33
+        assertEquals(108.333, ma[0].average, 0.01)
+    }
+
+    @Test
+    fun `calculateMovingAverage throws when window exceeds price count`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateMovingAverage(prices, window = 5)
+        }
+    }
+
+    @Test
+    fun `calculateMovingAverage throws with invalid window`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0)
+        )
+        
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateMovingAverage(prices, window = 0)
+        }
+    }
 }

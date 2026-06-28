@@ -3,11 +3,12 @@ package com.meiken.calculator
 import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
 import com.meiken.model.MaxDrawdownResult
+import com.meiken.model.MovingAverageData
 import com.meiken.model.RateOfChangeData
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe, drawdown, momentum. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
+/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe, drawdown, momentum, moving averages. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
 object FinancialCalculations {
 
     /** Converts sorted close-of-day prices to daily returns: (curr.close - prev.close) / prev.close per pair of consecutive days. One return per date (close-to-close). */
@@ -189,6 +190,32 @@ object FinancialCalculations {
                 date = sortedPrices[i].date,
                 rateOfChange = roc,
                 lookback = lookback
+            ))
+        }
+        
+        return result
+    }
+
+    /**
+     * Simple Moving Average (SMA): average price over a rolling window.
+     * MA[t] = mean(price[t-window+1] ... price[t])
+     * Smooths price action and identifies trends.
+     */
+    fun calculateMovingAverage(prices: List<DailyPrice>, window: Int): List<MovingAverageData> {
+        require(window > 0) { "Window must be positive" }
+        require(prices.size >= window) { "Need at least $window prices for moving average calculation" }
+        
+        val sortedPrices = prices.sortedBy { it.date }
+        val result = mutableListOf<MovingAverageData>()
+        
+        for (i in (window - 1) until sortedPrices.size) {
+            val windowPrices = sortedPrices.subList(i - window + 1, i + 1)
+            val average = windowPrices.map { it.close }.average()
+            
+            result.add(MovingAverageData(
+                date = sortedPrices[i].date,
+                average = average,
+                window = window
             ))
         }
         
