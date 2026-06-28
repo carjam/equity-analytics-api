@@ -58,4 +58,10 @@ object OutputValidator {
         value > MAX_DRAWDOWN_MAX -> "max_drawdown_extreme=%.2f".format(value)
         else -> null
     }
+
+    fun checkSortino(value: Double): String? = when {
+        !value.isFinite() -> "sortino_not_finite"
+        value < SHARPE_MIN || value > SHARPE_MAX -> "sortino_implausible=%.2f".format(value)
+        else -> null
+    }
 }

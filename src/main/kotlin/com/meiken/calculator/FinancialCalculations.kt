@@ -74,6 +74,32 @@ object FinancialCalculations {
     }
 
     /**
+     * Sortino Ratio: (annualized return - riskFreeRate) / downside deviation.
+     * Like Sharpe ratio, but only penalizes downside volatility (returns below zero).
+     * Uses semi-deviation of negative returns only, annualized.
+     */
+    fun calculateSortino(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double {
+        require(returns.isNotEmpty()) { "Returns list cannot be empty" }
+        
+        val annualizedReturn = annualizeReturn(returns, tradingDays)
+        val downsideReturns = returns.filter { it < 0.0 }
+        
+        // If no downside returns, downside deviation is zero (perfect upside-only)
+        // Return positive infinity would be mathematically correct, but we use a large number
+        if (downsideReturns.isEmpty()) {
+            return if (annualizedReturn > riskFreeRate) Double.MAX_VALUE / 1e10 else 0.0
+        }
+        
+        // Semi-deviation: sqrt(mean(negative_returns^2))
+        val downsideSemiVariance = downsideReturns.map { it * it }.average()
+        val dailyDownsideDeviation = sqrt(downsideSemiVariance)
+        val annualizedDownsideDeviation = dailyDownsideDeviation * sqrt(tradingDays.toDouble())
+        
+        require(annualizedDownsideDeviation != 0.0) { "Downside deviation cannot be zero" }
+        return (annualizedReturn - riskFreeRate) / annualizedDownsideDeviation
+    }
+
+    /**
      * Maximum Drawdown: largest peak-to-trough decline as a percentage.
      * Returns the maximum drawdown value, peak date, trough date, and peak/trough values.
      * MDD = max((peak - trough) / peak) for all peaks in the series.

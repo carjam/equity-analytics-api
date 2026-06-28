@@ -15,6 +15,8 @@ import com.meiken.model.DrawdownResponse
 import com.meiken.model.RollingCorrelation
 import com.meiken.model.SharpeMetadata
 import com.meiken.model.SharpeResponse
+import com.meiken.model.SortinoMetadata
+import com.meiken.model.SortinoResponse
 import com.meiken.model.VolatilityData
 import com.meiken.model.VolatilityMetadata
 import com.meiken.model.VolatilityResponse
@@ -137,6 +139,42 @@ class AnalyticsServiceImpl(
                 outlierCount = analytics.outlierCount,
                 missingDays = analytics.missingDays,
                 warnings = sharpeWarnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Sortino from cached close-of-day returns: (annualizedReturn - riskFreeRate) / downsideDeviation. Only penalizes downside volatility. */
+    override suspend fun calculateSortino(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        riskFreeRate: Double
+    ): SortinoResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyReturns.size >= 2) { "Need at least 2 data points for Sortino ratio" }
+        
+        val returnValues = if (analytics.calculationReturnValues.isNotEmpty()) {
+            analytics.calculationReturnValues
+        } else {
+            analytics.dailyReturns.map { it.returnValue }
+        }
+        
+        val sortino = FinancialCalculations.calculateSortino(returnValues, riskFreeRate)
+        val sortinoWarnings = analytics.warnings + listOfNotNull(OutputValidator.checkSortino(sortino))
+        SortinoResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            sortino = sortino,
+            riskFreeRate = riskFreeRate,
+            metadata = SortinoMetadata(
+                dataPoints = analytics.dailyReturns.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = sortinoWarnings.ifEmpty { null }
             )
         )
     }
