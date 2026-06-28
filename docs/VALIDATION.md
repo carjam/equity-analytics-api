@@ -70,18 +70,23 @@ FinancialCalculations.calculateDailyReturns(listOf(
 
 ---
 
-## Test 5: calculateAlpha with known values
+## Test 5: calculateAlpha with known values (Jensen's alpha via OLS)
 
 **Input:**
 - Target returns: List of 252 × 0.001
 - Benchmark returns: List of 252 × 0.0008
+- Risk-free rate: 0.04 (default)
 
 **Calculation:**
-1. Target annualized: (1.001)^252 - 1 ≈ 0.2872
-2. Benchmark annualized: (1.0008)^252 - 1 ≈ 0.2229
-3. Alpha = 0.2872 - 0.2229 ≈ 0.0643
+1. β = cov(target, benchmark) / var(benchmark)
+   — both series are constant, so β = 1.0 (perfectly correlated, same variance ratio)
+2. rf_daily = (1.04)^(1/252) − 1 ≈ 0.000155
+3. α_daily = mean(target) − β × mean(benchmark) − rf_daily × (1 − β)
+           = 0.001 − 1.0 × 0.0008 − 0.000155 × 0.0
+           = 0.0002
+4. α_annualized = (1.0002)^252 − 1 ≈ 0.0513
 
-**Expected:** Alpha ≈ 0.0543 (with tolerance)
+**Expected:** Alpha ≈ 0.05 (with tolerance 0.01)
 
 **Assertion Tolerance:** 0.01
 

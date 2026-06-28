@@ -70,7 +70,8 @@ fun Route.analyticsRoutes(analyticsService, defaultsConfig, maxStringLength)
 // Response models (serialized to JSON)
 data class Returns(symbol, fromDate, toDate, dailyReturns, metadata)
 data class Alpha(target, benchmark, fromDate, toDate, alpha, metadata)
-// Plus VolatilityResponse, SharpeResponse, BetaResponse, CorrelationResponse
+// Plus VolatilityResponse, SharpeResponse, BetaResponse, CorrelationResponse,
+//      SortinoResponse, CalmarResponse, DrawdownResponse, MomentumResponse
 ```
 
 ### 2. Service Layer (`service` package)
@@ -105,6 +106,10 @@ interface AnalyticsService {
     suspend fun calculateSharpe(symbol, fromDate, toDate, riskFreeRate): SharpeResponse
     suspend fun calculateBeta(target, benchmark, fromDate, toDate): BetaResponse
     suspend fun calculateCorrelation(ticker1, ticker2, fromDate, toDate, window): CorrelationResponse
+    suspend fun calculateSortino(symbol, fromDate, toDate, riskFreeRate): SortinoResponse
+    suspend fun calculateCalmar(symbol, fromDate, toDate): CalmarResponse
+    suspend fun calculateDrawdown(symbol, fromDate, toDate): DrawdownResponse
+    suspend fun calculateMomentum(symbol, fromDate, toDate, lookbacks): MomentumResponse
 }
 ```
 
@@ -119,31 +124,28 @@ interface AnalyticsService {
 ```kotlin
 object FinancialCalculations {
     fun calculateDailyReturns(prices: List<DailyPrice>): List<DailyReturn>
-    fun calculateAlpha(targetReturns: List<Double>, benchmarkReturns: List<Double>, tradingDays: Int = 252): Double
+    // Jensen's alpha via OLS: returns Pair(annualizedAlpha, beta)
+    fun calculateAlpha(targetReturns, benchmarkReturns, riskFreeRate = 0.04, tradingDays = 252): Pair<Double, Double>
     fun calculateBeta(targetReturns: List<Double>, benchmarkReturns: List<Double>): Double
     fun calculateVolatility(returns: List<Double>, tradingDays: Int = 252): Pair<Double, Double>  // daily, annualized
     fun calculateSharpe(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double
-    
+    fun calculateSortino(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double
+    fun calculateCalmar(annualizedReturn: Double, maxDrawdown: Double): Double
+    fun calculateMaxDrawdown(prices: List<DailyPrice>): MaxDrawdownResult
+    fun calculateRateOfChange(prices: List<DailyPrice>, lookback: Int): List<RateOfChangeData>
+    // Scalar overload for OLS alpha; list overload uses geometric mean
     fun annualizeReturn(avgDailyReturn: Double, tradingDays: Int = 252): Double
+    fun annualizeReturn(returns: List<Double>, tradingDays: Int = 252): Double
 }
 object StatisticalCalculations {
     fun mean(values: List<Double>): Double
-    fun variance(values: List<Double>): Double
+    fun variance(values: List<Double>): Double       // N-1 (sample)
     fun standardDeviation(values: List<Double>): Double
-    fun covariance(series1: List<Double>, series2: List<Double>): Double
+    fun covariance(series1: List<Double>, series2: List<Double>): Double  // N-1 (sample)
     fun correlation(series1: List<Double>, series2: List<Double>): Double
 }
 ```
-(Rolling correlation is implemented in AnalyticsServiceImpl using aligned returns and a window.)
-
-object StatisticalCalculations {
-    fun mean(values: List<Double>): Double
-    fun variance(values: List<Double>): Double
-    fun standardDeviation(values: List<Double>): Double
-    fun covariance(series1: List<Double>, series2: List<Double>): Double
-    fun correlation(series1: List<Double>, series2: List<Double>): Double
-}
-```
+(Rolling correlation is implemented in `AnalyticsServiceImpl` using aligned returns and a sliding window.)
 
 ### 4. Data Access Layer (`data` package)
 
@@ -240,7 +242,7 @@ meiken/
 │   ├── security/   # InputValidator, SecurityConfig, ApiKeyAuth, RateLimiting, SecurityHeaders, TlsConfig
 │   ├── service/    # ReturnsService, AlphaService, AnalyticsService + Impls
 │   ├── util/       # DateUtils, MarketCalendar
-│   ├── validator/  # DataValidator
+│   ├── validator/  # DataValidator, OutputValidator
 │   └── lifecycle/  # ShutdownState
 ├── src/main/resources/
 │   └── application.conf
