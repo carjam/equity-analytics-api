@@ -56,8 +56,16 @@ class AlphaServiceImpl(
         )
         require(alignedTarget.isNotEmpty()) { "Insufficient overlapping data for alpha calculation" }
 
-        val targetValues = alignedTarget.map { it.returnValue }
-        val benchmarkValues = alignedBenchmark.map { it.returnValue }
+        // Use winsorized return values so data errors don't contaminate alpha or annualized returns.
+        // Build date → winsorized value maps; fall back to raw returnValue when field is empty.
+        val targetCalcMap = targetAnalytics.dailyReturns
+            .zip(targetAnalytics.calculationReturnValues)
+            .associate { (dr, cv) -> dr.date.toEpochDays() to cv }
+        val benchmarkCalcMap = benchmarkAnalytics.dailyReturns
+            .zip(benchmarkAnalytics.calculationReturnValues)
+            .associate { (dr, cv) -> dr.date.toEpochDays() to cv }
+        val targetValues = alignedTarget.map { targetCalcMap[it.date.toEpochDays()] ?: it.returnValue }
+        val benchmarkValues = alignedBenchmark.map { benchmarkCalcMap[it.date.toEpochDays()] ?: it.returnValue }
         val (alphaValue, beta) = FinancialCalculations.calculateAlpha(targetValues, benchmarkValues, riskFreeRate, tradingDaysPerYear)
         val targetAnnualized = FinancialCalculations.annualizeReturn(targetValues, tradingDaysPerYear)
         val benchmarkAnnualized = FinancialCalculations.annualizeReturn(benchmarkValues, tradingDaysPerYear)

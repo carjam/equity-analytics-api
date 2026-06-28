@@ -108,6 +108,48 @@ class DataValidatorTest {
     }
 
     @Test
+    fun `winsorize caps values beyond sigma bands`() {
+        // 99 small returns + one large outlier. The outlier is reduced to the cap boundary.
+        val normal = List(99) { 0.001 }
+        val withSpike = normal + 10.0
+        val result = DataValidator.winsorize(withSpike)
+        assertEquals(withSpike.size, result.size)
+        // Spike is capped: reduced from original but not eliminated
+        assert(result.last() < withSpike.last()) { "spike should be capped below 10.0; was ${result.last()}" }
+        assert(result.last() > 0.001) { "capped value should be above normal returns; was ${result.last()}" }
+        // Normal values are unaffected
+        assertEquals(normal.first(), result.first())
+    }
+
+    @Test
+    fun `winsorize preserves series length`() {
+        val returns = List(20) { 0.01 } + listOf(0.5, -0.5)
+        assertEquals(returns.size, DataValidator.winsorize(returns).size)
+    }
+
+    @Test
+    fun `winsorize with no outliers returns identical values`() {
+        val returns = List(20) { 0.01 }
+        assertEquals(returns, DataValidator.winsorize(returns))
+    }
+
+    @Test
+    fun `winsorize returns unchanged list when size below 3`() {
+        val short = listOf(0.1, -0.5)
+        assertEquals(short, DataValidator.winsorize(short))
+    }
+
+    @Test
+    fun `winsorize with tight sigma caps more aggressively than wide sigma`() {
+        val returns = List(50) { 0.0 } + 2.0
+        val tightResult = DataValidator.winsorize(returns, sigma = 1.0)
+        val wideResult = DataValidator.winsorize(returns, sigma = 5.0)
+        assert(tightResult.last() < wideResult.last()) {
+            "tight cap (${tightResult.last()}) should be lower than wide cap (${wideResult.last()})"
+        }
+    }
+
+    @Test
     fun `validatePriceData with config uses config thresholds`() {
         val config = com.meiken.config.DataQualityConfig(
             minPrice = 1.0,

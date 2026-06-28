@@ -29,8 +29,15 @@ data class DataQualityIssue(
 )
 
 /**
- * Validates and cleans market price data. Does not remove outliers from returns (real volatility);
- * [detectOutliers] only reports indices for metadata.
+ * Validates and cleans market price data.
+ *
+ * **Outlier handling decision:** Return outliers are *winsorized* (capped at ±N sigma) rather than
+ * removed. Removal breaks date alignment between target and benchmark series and discards genuine
+ * market events (e.g., March 2020 crash). Winsorization preserves series length and neutralizes
+ * data errors (stale prices, split artifacts) without hiding that an extreme value occurred.
+ * [detectOutliers] identifies the indices; [winsorize] applies the cap. The raw return series is
+ * retained for display; calculations always use the winsorized series.
+ *
  * Thresholds can be supplied via [DataQualityConfig] or use built-in defaults.
  */
 object DataValidator {
@@ -101,8 +108,8 @@ object DataValidator {
     }
 
     /**
-     * Detects outlier return indices using sigma rule (default 3-sigma). Does not remove outliers.
-     * Returns indices into [returns] list.
+     * Detects outlier return indices using the sigma rule. Returns indices into [returns]; call
+     * [winsorize] to cap those values rather than removing them.
      */
     @JvmOverloads
     fun detectOutliers(returns: List<Double>, sigma: Double = DEFAULT_OUTLIER_SIGMA): List<Int> {
@@ -114,5 +121,22 @@ object DataValidator {
         return returns.mapIndexed { index, r -> index to r }
             .filter { (_, r) -> (r - mean).absoluteValue > sigma * std }
             .map { it.first }
+    }
+
+    /**
+     * Winsorizes [returns] by capping each value to [mean ± sigma * stdDev]. Preserves series
+     * length and date alignment. Use [detectOutliers] to count how many values were affected.
+     * Returns the original list unchanged when size < 3 or stdDev is zero (no meaningful bands).
+     */
+    @JvmOverloads
+    fun winsorize(returns: List<Double>, sigma: Double = DEFAULT_OUTLIER_SIGMA): List<Double> {
+        if (returns.size < 3) return returns
+        val mean = returns.average()
+        val variance = returns.map { (it - mean) * (it - mean) }.average()
+        val std = sqrt(variance)
+        if (std == 0.0) return returns
+        val lower = mean - sigma * std
+        val upper = mean + sigma * std
+        return returns.map { it.coerceIn(lower, upper) }
     }
 }

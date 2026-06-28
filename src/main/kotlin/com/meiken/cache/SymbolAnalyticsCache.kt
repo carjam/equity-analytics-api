@@ -39,11 +39,18 @@ data class SymbolAnalytics(
     val annualizedVolatility: Double,
     val averageDailyReturn: Double,
     val annualizedReturn: Double,
+    /**
+     * Return values after winsorizing outliers at ±outlierSigma. Parallel to [dailyReturns] (same
+     * length and order). All metric calculations (volatility, Sharpe, annualized return, alpha) use
+     * this series. [dailyReturns] retains the raw values for display. Empty only in legacy/test
+     * contexts where the field was not populated.
+     */
+    val calculationReturnValues: List<Double> = emptyList(),
     /** When this analytics entry was computed/fetched; used for staleness and [dataFreshness]. */
     val fetchedAt: Instant = Clock.System.now(),
     /** Overall data quality: GOOD, ACCEPTABLE, or POOR (from missing days, gaps, outliers). */
     val dataQuality: String = "GOOD",
-    /** Number of return outliers (3-sigma); included in calculations, not removed. */
+    /** Number of return outliers (3-sigma) that were winsorized; reported in [warnings] as "winsorized=N". */
     val outlierCount: Int = 0,
     /** Expected trading days in range minus actual price count (from [MarketCalendar.getTradingDays]). */
     val missingDays: Int = 0,
@@ -150,14 +157,18 @@ class SymbolAnalyticsCacheService(
             val prices = marketDataService.getHistoricalPrices(symbol, fromDate, toDate)
             val dailyReturns = FinancialCalculations.calculateDailyReturns(prices)
             require(dailyReturns.size >= 2) { "Need at least 2 returns for analytics (symbol=$symbol)" }
-            val returnValues = dailyReturns.map { it.returnValue }
+            val rawReturnValues = dailyReturns.map { it.returnValue }
             val tradingDays = calculationsConfig.tradingDaysPerYear
-            // Outlier count for metadata (outliers are kept in calculations).
-            val outlierIndices = DataValidator.detectOutliers(returnValues, dataQualityConfig.outlierSigma)
+            // Detect outliers for metadata count, then winsorize (cap at ±sigma) before calculations.
+            // Winsorization rather than removal: preserves series length and date alignment across
+            // securities; neutralizes data errors (stale prices, split artifacts) while keeping the
+            // observation in the series. See DataValidator for the full rationale.
+            val outlierIndices = DataValidator.detectOutliers(rawReturnValues, dataQualityConfig.outlierSigma)
             Metrics.recordOutliersDetected(outlierIndices.size, symbol)
-            val avgDailyReturn = returnValues.average()
-            val (dailyVol, annualizedVol) = FinancialCalculations.calculateVolatility(returnValues, tradingDays)
-            val annualizedReturn = FinancialCalculations.annualizeReturn(returnValues, tradingDays)
+            val calculationReturnValues = DataValidator.winsorize(rawReturnValues, dataQualityConfig.outlierSigma)
+            val avgDailyReturn = calculationReturnValues.average()
+            val (dailyVol, annualizedVol) = FinancialCalculations.calculateVolatility(calculationReturnValues, tradingDays)
+            val annualizedReturn = FinancialCalculations.annualizeReturn(calculationReturnValues, tradingDays)
             // Data quality: expected trading days (US calendar), missing count, gap runs, quality level, warnings.
             val expectedTradingDays = MarketCalendar.getTradingDays(fromDate, toDate)
             val actualDays = prices.size
@@ -172,6 +183,7 @@ class SymbolAnalyticsCacheService(
                 toDate = toDate,
                 dailyPrices = prices,
                 dailyReturns = dailyReturns,
+                calculationReturnValues = calculationReturnValues,
                 dailyVolatility = dailyVol,
                 annualizedVolatility = annualizedVol,
                 averageDailyReturn = avgDailyReturn,
@@ -254,7 +266,7 @@ class SymbolAnalyticsCacheService(
         val w = mutableListOf<String>()
         if (missingDays > 0) w.add("missing_days=$missingDays")
         if (gapDays.isNotEmpty()) w.add("gap_days=${gapDays.size}")
-        if (outlierCount > 0) w.add("outliers=$outlierCount")
+        if (outlierCount > 0) w.add("winsorized=$outlierCount")
         if (expected > 0 && actual.toDouble() / expected < cacheConfig.sparseRatio) w.add("sparse_data")
         return w
     }
