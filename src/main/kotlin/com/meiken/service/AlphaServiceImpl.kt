@@ -9,6 +9,7 @@ import com.meiken.model.AlphaMetadata
 import com.meiken.model.DailyReturn
 import com.meiken.observability.Metrics
 import com.meiken.util.validateDateRange
+import com.meiken.validator.OutputValidator
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.LocalDate
@@ -74,7 +75,8 @@ class AlphaServiceImpl(
             .minByOrNull { when (it) { "POOR" -> 0; "ACCEPTABLE" -> 1; else -> 2 } } ?: "GOOD"
         val combinedOutliers = targetAnalytics.outlierCount + benchmarkAnalytics.outlierCount
         val combinedMissing = targetAnalytics.missingDays + benchmarkAnalytics.missingDays
-        val combinedWarnings = (targetAnalytics.warnings + benchmarkAnalytics.warnings).distinct()
+        val combinedWarnings = (targetAnalytics.warnings + benchmarkAnalytics.warnings).distinct() +
+            listOfNotNull(OutputValidator.checkAlpha(alphaValue), OutputValidator.checkBeta(beta))
         Alpha(
             target = target,
             benchmark = benchmark,

@@ -15,6 +15,7 @@ import com.meiken.model.VolatilityData
 import com.meiken.model.VolatilityMetadata
 import com.meiken.model.VolatilityResponse
 import com.meiken.util.validateDateRange
+import com.meiken.validator.OutputValidator
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.LocalDate
@@ -40,6 +41,8 @@ class AnalyticsServiceImpl(
             validateDateRange(fromDate, toDate, maxDays)
             val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
             require(analytics.dailyReturns.size >= 2) { "Need at least 2 data points for volatility" }
+            val volWarnings = analytics.warnings +
+                listOfNotNull(OutputValidator.checkAnnualizedVolatility(analytics.annualizedVolatility))
             VolatilityResponse(
                 symbol = symbol,
                 fromDate = fromDate,
@@ -54,7 +57,7 @@ class AnalyticsServiceImpl(
                     dataQuality = analytics.dataQuality,
                     outlierCount = analytics.outlierCount,
                     missingDays = analytics.missingDays,
-                    warnings = analytics.warnings.ifEmpty { null }
+                    warnings = volWarnings.ifEmpty { null }
                 )
             )
         }
@@ -85,6 +88,8 @@ class AnalyticsServiceImpl(
         val beta = FinancialCalculations.calculateBeta(targetValues, benchmarkValues)
         val worstQuality = listOf(targetAnalytics.dataQuality, benchmarkAnalytics.dataQuality)
             .minByOrNull { when (it) { "POOR" -> 0; "ACCEPTABLE" -> 1; else -> 2 } } ?: "GOOD"
+        val betaWarnings = (targetAnalytics.warnings + benchmarkAnalytics.warnings).distinct() +
+            listOfNotNull(OutputValidator.checkBeta(beta))
         BetaResponse(
             target = target,
             benchmark = benchmark,
@@ -97,7 +102,7 @@ class AnalyticsServiceImpl(
                 dataQuality = worstQuality,
                 outlierCount = targetAnalytics.outlierCount + benchmarkAnalytics.outlierCount,
                 missingDays = targetAnalytics.missingDays + benchmarkAnalytics.missingDays,
-                warnings = (targetAnalytics.warnings + benchmarkAnalytics.warnings).distinct().ifEmpty { null }
+                warnings = betaWarnings.ifEmpty { null }
             )
         )
     }
@@ -114,6 +119,7 @@ class AnalyticsServiceImpl(
         require(analytics.dailyReturns.size >= 2) { "Need at least 2 data points for Sharpe ratio" }
         require(analytics.annualizedVolatility != 0.0) { "Volatility cannot be zero" }
         val sharpe = (analytics.annualizedReturn - riskFreeRate) / analytics.annualizedVolatility
+        val sharpeWarnings = analytics.warnings + listOfNotNull(OutputValidator.checkSharpe(sharpe))
         SharpeResponse(
             symbol = symbol,
             fromDate = fromDate,
@@ -126,7 +132,7 @@ class AnalyticsServiceImpl(
                 dataQuality = analytics.dataQuality,
                 outlierCount = analytics.outlierCount,
                 missingDays = analytics.missingDays,
-                warnings = analytics.warnings.ifEmpty { null }
+                warnings = sharpeWarnings.ifEmpty { null }
             )
         )
     }
