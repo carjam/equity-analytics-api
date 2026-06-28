@@ -18,6 +18,7 @@ import io.ktor.server.routing.route
  * - GET tickers/{symbol}/volatility (optional from_date, to_date; default YTD)
  * - GET tickers/{symbol}/sharpe (optional risk_free_rate, from_date, to_date; default risk_free_rate from config)
  * - GET tickers/{symbol}/sortino (optional risk_free_rate, from_date, to_date; default risk_free_rate from config)
+ * - GET tickers/{symbol}/calmar (optional from_date, to_date; default YTD)
  * - GET tickers/{symbol}/drawdown (optional from_date, to_date; default YTD)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET correlation?ticker1=&ticker2= (optional from_date, to_date, window; default window from config)
@@ -66,6 +67,17 @@ fun Route.analyticsRoutes(
                     val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
                         ?: getToday()
                     val response = analyticsService.calculateSortino(symbol, fromDate, toDate, riskFreeRate)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+            }
+            route("calmar") {
+                get {
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                        ?: getCurrentYearStart()
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                        ?: getToday()
+                    val response = analyticsService.calculateCalmar(symbol, fromDate, toDate)
                     call.respond(HttpStatusCode.OK, response)
                 }
             }

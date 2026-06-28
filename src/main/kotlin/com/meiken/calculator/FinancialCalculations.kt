@@ -74,6 +74,23 @@ object FinancialCalculations {
     }
 
     /**
+     * Calmar Ratio: annualized return / abs(max drawdown).
+     * Measures return per unit of maximum drawdown risk.
+     * Returns positive infinity if maxDrawdown is 0 and return is positive, 0 if both are 0.
+     */
+    fun calculateCalmar(annualizedReturn: Double, maxDrawdown: Double): Double {
+        require(maxDrawdown >= 0.0) { "Max drawdown must be non-negative" }
+        
+        if (maxDrawdown == 0.0) {
+            return if (annualizedReturn > 0.0) Double.POSITIVE_INFINITY
+                   else if (annualizedReturn < 0.0) Double.NEGATIVE_INFINITY
+                   else 0.0
+        }
+        
+        return annualizedReturn / maxDrawdown
+    }
+
+    /**
      * Sortino Ratio: (annualized return - riskFreeRate) / downside deviation.
      * Like Sharpe ratio, but only penalizes downside volatility (returns below zero).
      * Uses semi-deviation of negative returns only, annualized.

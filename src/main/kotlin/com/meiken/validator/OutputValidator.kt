@@ -64,4 +64,11 @@ object OutputValidator {
         value < SHARPE_MIN || value > SHARPE_MAX -> "sortino_implausible=%.2f".format(value)
         else -> null
     }
+
+    fun checkCalmar(value: Double): String? = when {
+        value.isNaN() -> "calmar_not_defined"
+        value.isInfinite() -> null  // Infinity is valid (zero drawdown)
+        value < -10.0 || value > 10.0 -> "calmar_implausible=%.2f".format(value)
+        else -> null
+    }
 }

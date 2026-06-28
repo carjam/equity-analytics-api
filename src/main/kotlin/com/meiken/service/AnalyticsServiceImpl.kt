@@ -6,6 +6,8 @@ import com.meiken.calculator.StatisticalCalculations
 import com.meiken.data.MarketDataService
 import com.meiken.model.BetaMetadata
 import com.meiken.model.BetaResponse
+import com.meiken.model.CalmarMetadata
+import com.meiken.model.CalmarResponse
 import com.meiken.model.CorrelationResponse
 import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
@@ -175,6 +177,38 @@ class AnalyticsServiceImpl(
                 outlierCount = analytics.outlierCount,
                 missingDays = analytics.missingDays,
                 warnings = sortinoWarnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Calmar from cached data: annualizedReturn / maxDrawdown. Measures return per unit of drawdown risk. */
+    override suspend fun calculateCalmar(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): CalmarResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyPrices.isNotEmpty()) { "No price data available for Calmar ratio" }
+        
+        val drawdownResult = FinancialCalculations.calculateMaxDrawdown(analytics.dailyPrices)
+        val calmar = FinancialCalculations.calculateCalmar(analytics.annualizedReturn, drawdownResult.maxDrawdown)
+        val calmarWarnings = analytics.warnings + listOfNotNull(OutputValidator.checkCalmar(calmar))
+        
+        CalmarResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            calmar = calmar,
+            annualizedReturn = analytics.annualizedReturn,
+            maxDrawdown = drawdownResult.maxDrawdown,
+            metadata = CalmarMetadata(
+                dataPoints = analytics.dailyPrices.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = calmarWarnings.ifEmpty { null }
             )
         )
     }

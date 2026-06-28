@@ -377,4 +377,43 @@ class FinancialCalculationsTest {
         // This should return 0.0 (no excess return, but denominator is defined)
         assertEquals(0.0, sortino, 0.001)
     }
+
+    @Test
+    fun `calculateCalmar with positive return and drawdown`() {
+        // Return of 20%, max drawdown of 10% -> Calmar = 0.20 / 0.10 = 2.0
+        val calmar = FinancialCalculations.calculateCalmar(annualizedReturn = 0.20, maxDrawdown = 0.10)
+        
+        assertEquals(2.0, calmar, 0.0001)
+    }
+
+    @Test
+    fun `calculateCalmar with negative return and drawdown`() {
+        // Negative return: -10%, max drawdown 15% -> Calmar = -0.10 / 0.15 = -0.667
+        val calmar = FinancialCalculations.calculateCalmar(annualizedReturn = -0.10, maxDrawdown = 0.15)
+        
+        assertEquals(-0.667, calmar, 0.001)
+    }
+
+    @Test
+    fun `calculateCalmar with zero drawdown returns infinity for positive return`() {
+        // No drawdown with positive return -> infinite Calmar (perfect)
+        val calmar = FinancialCalculations.calculateCalmar(annualizedReturn = 0.15, maxDrawdown = 0.0)
+        
+        assert(calmar == Double.POSITIVE_INFINITY) { "Calmar should be +infinity with zero drawdown and positive return" }
+    }
+
+    @Test
+    fun `calculateCalmar with zero drawdown and zero return`() {
+        // No return, no drawdown -> 0 / 0, should return 0 or NaN (we'll define as 0)
+        val calmar = FinancialCalculations.calculateCalmar(annualizedReturn = 0.0, maxDrawdown = 0.0)
+        
+        assertEquals(0.0, calmar, 0.0001)
+    }
+
+    @Test
+    fun `calculateCalmar throws when max drawdown is negative`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateCalmar(annualizedReturn = 0.10, maxDrawdown = -0.05)
+        }
+    }
 }
