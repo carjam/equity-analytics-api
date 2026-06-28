@@ -26,6 +26,7 @@ object OutputValidator {
     private const val ALPHA_MAX = 1.0
     private const val VOL_MIN = 0.05
     private const val VOL_MAX = 3.0
+    private const val MAX_DRAWDOWN_MAX = 0.99  // 99% drawdown is extreme but possible (e.g., penny stocks)
 
     fun checkSharpe(value: Double): String? = when {
         !value.isFinite() -> "sharpe_not_finite"
@@ -48,6 +49,13 @@ object OutputValidator {
     fun checkAnnualizedVolatility(value: Double): String? = when {
         !value.isFinite() -> "volatility_not_finite"
         value < VOL_MIN || value > VOL_MAX -> "volatility_implausible=%.2f".format(value)
+        else -> null
+    }
+
+    fun checkMaxDrawdown(value: Double): String? = when {
+        !value.isFinite() -> "max_drawdown_not_finite"
+        value < 0.0 -> "max_drawdown_negative=%.2f".format(value)
+        value > MAX_DRAWDOWN_MAX -> "max_drawdown_extreme=%.2f".format(value)
         else -> null
     }
 }

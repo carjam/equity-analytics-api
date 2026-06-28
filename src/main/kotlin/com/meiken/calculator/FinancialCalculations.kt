@@ -2,10 +2,11 @@ package com.meiken.calculator
 
 import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
+import com.meiken.model.MaxDrawdownResult
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
+/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe, drawdown. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
 object FinancialCalculations {
 
     /** Converts sorted close-of-day prices to daily returns: (curr.close - prev.close) / prev.close per pair of consecutive days. One return per date (close-to-close). */
@@ -70,5 +71,56 @@ object FinancialCalculations {
         val (_, annualizedVol) = calculateVolatility(returns, tradingDays)
         require(annualizedVol != 0.0) { "Volatility cannot be zero" }
         return (annualizedReturn - riskFreeRate) / annualizedVol
+    }
+
+    /**
+     * Maximum Drawdown: largest peak-to-trough decline as a percentage.
+     * Returns the maximum drawdown value, peak date, trough date, and peak/trough values.
+     * MDD = max((peak - trough) / peak) for all peaks in the series.
+     */
+    fun calculateMaxDrawdown(prices: List<DailyPrice>): MaxDrawdownResult {
+        require(prices.isNotEmpty()) { "Cannot calculate max drawdown with empty price list" }
+        
+        if (prices.size == 1) {
+            val price = prices.first()
+            return MaxDrawdownResult(
+                maxDrawdown = 0.0,
+                peakDate = price.date,
+                troughDate = price.date,
+                peakValue = price.close,
+                troughValue = price.close
+            )
+        }
+
+        var peak = prices.first().close
+        var peakDate = prices.first().date
+        var maxDD = 0.0
+        var maxDDPeakDate = prices.first().date
+        var maxDDTroughDate = prices.first().date
+        var maxDDPeakValue = prices.first().close
+        var maxDDTroughValue = prices.first().close
+
+        prices.forEach { price ->
+            if (price.close > peak) {
+                peak = price.close
+                peakDate = price.date
+            }
+            val drawdown = (peak - price.close) / peak
+            if (drawdown > maxDD) {
+                maxDD = drawdown
+                maxDDPeakDate = peakDate
+                maxDDTroughDate = price.date
+                maxDDPeakValue = peak
+                maxDDTroughValue = price.close
+            }
+        }
+
+        return MaxDrawdownResult(
+            maxDrawdown = maxDD,
+            peakDate = maxDDPeakDate,
+            troughDate = maxDDTroughDate,
+            peakValue = maxDDPeakValue,
+            troughValue = maxDDTroughValue
+        )
     }
 }

@@ -225,4 +225,95 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculateSharpe(constantReturns)
         }
     }
+
+    @Test
+    fun `calculateMaxDrawdown with declining prices returns correct drawdown`() {
+        // Price falls from 100 to 80 (20% drawdown)
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 95.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 80.0)
+        )
+
+        val result = FinancialCalculations.calculateMaxDrawdown(prices)
+
+        assertEquals(0.20, result.maxDrawdown, 0.0001)
+        assertEquals(LocalDate(2024, 1, 1), result.peakDate)
+        assertEquals(LocalDate(2024, 1, 3), result.troughDate)
+        assertEquals(100.0, result.peakValue, 0.0001)
+        assertEquals(80.0, result.troughValue, 0.0001)
+    }
+
+    @Test
+    fun `calculateMaxDrawdown with multiple peaks uses largest drawdown`() {
+        // Peak at 100, trough at 75 (25% DD)
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 80.0),  // 20% DD from 100
+            DailyPrice(LocalDate(2024, 1, 3), close = 95.0),   // partial recovery, still below 100
+            DailyPrice(LocalDate(2024, 1, 4), close = 75.0)    // 25% DD from initial peak of 100
+        )
+
+        val result = FinancialCalculations.calculateMaxDrawdown(prices)
+
+        // Largest DD is from 100 to 75 = 25%
+        assertEquals(0.25, result.maxDrawdown, 0.001)
+        assertEquals(LocalDate(2024, 1, 1), result.peakDate)
+        assertEquals(LocalDate(2024, 1, 4), result.troughDate)
+    }
+
+    @Test
+    fun `calculateMaxDrawdown with new higher peak resets tracking`() {
+        // Peak at 100, recovery to 110 (new peak), then drop to 88 (20% from 110)
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 90.0),   // 10% DD
+            DailyPrice(LocalDate(2024, 1, 3), close = 110.0),  // new high, resets peak
+            DailyPrice(LocalDate(2024, 1, 4), close = 88.0)    // 20% DD from 110
+        )
+
+        val result = FinancialCalculations.calculateMaxDrawdown(prices)
+
+        // Largest DD is from 110 to 88 = 20%
+        assertEquals(0.20, result.maxDrawdown, 0.001)
+        assertEquals(LocalDate(2024, 1, 3), result.peakDate)
+        assertEquals(LocalDate(2024, 1, 4), result.troughDate)
+        assertEquals(110.0, result.peakValue, 0.001)
+        assertEquals(88.0, result.troughValue, 0.001)
+    }
+
+    @Test
+    fun `calculateMaxDrawdown with only increasing prices returns zero drawdown`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 110.0)
+        )
+
+        val result = FinancialCalculations.calculateMaxDrawdown(prices)
+
+        assertEquals(0.0, result.maxDrawdown, 0.0001)
+        assertEquals(LocalDate(2024, 1, 1), result.peakDate)
+        assertEquals(LocalDate(2024, 1, 1), result.troughDate)
+    }
+
+    @Test
+    fun `calculateMaxDrawdown with single price returns zero drawdown`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0)
+        )
+
+        val result = FinancialCalculations.calculateMaxDrawdown(prices)
+
+        assertEquals(0.0, result.maxDrawdown, 0.0001)
+        assertEquals(LocalDate(2024, 1, 1), result.peakDate)
+        assertEquals(LocalDate(2024, 1, 1), result.troughDate)
+    }
+
+    @Test
+    fun `calculateMaxDrawdown throws with empty list`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateMaxDrawdown(emptyList())
+        }
+    }
 }

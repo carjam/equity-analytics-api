@@ -17,6 +17,7 @@ import io.ktor.server.routing.route
  * Analytics routes under /api/v1. All metrics use close-of-day prices only (close-to-close daily returns).
  * - GET tickers/{symbol}/volatility (optional from_date, to_date; default YTD)
  * - GET tickers/{symbol}/sharpe (optional risk_free_rate, from_date, to_date; default risk_free_rate from config)
+ * - GET tickers/{symbol}/drawdown (optional from_date, to_date; default YTD)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET correlation?ticker1=&ticker2= (optional from_date, to_date, window; default window from config)
  * Symbols 1-5 alphanumeric; dates YYYY-MM-DD; errors -> 400/404/500.
@@ -51,6 +52,17 @@ fun Route.analyticsRoutes(
                     val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
                         ?: getToday()
                     val response = analyticsService.calculateSharpe(symbol, fromDate, toDate, riskFreeRate)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+            }
+            route("drawdown") {
+                get {
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                        ?: getCurrentYearStart()
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                        ?: getToday()
+                    val response = analyticsService.calculateDrawdown(symbol, fromDate, toDate)
                     call.respond(HttpStatusCode.OK, response)
                 }
             }

@@ -7,7 +7,11 @@ import com.meiken.data.MarketDataService
 import com.meiken.model.BetaMetadata
 import com.meiken.model.BetaResponse
 import com.meiken.model.CorrelationResponse
+import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
+import com.meiken.model.DrawdownData
+import com.meiken.model.DrawdownMetadata
+import com.meiken.model.DrawdownResponse
 import com.meiken.model.RollingCorrelation
 import com.meiken.model.SharpeMetadata
 import com.meiken.model.SharpeResponse
@@ -176,6 +180,49 @@ class AnalyticsServiceImpl(
             toDate = toDate,
             correlations = correlations
         )
+    }
+
+    /** Maximum drawdown from cached close prices: largest peak-to-trough decline as a percentage. */
+    override suspend fun calculateDrawdown(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): DrawdownResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyPrices.isNotEmpty()) { "No price data available for drawdown calculation" }
+        
+        val result = FinancialCalculations.calculateMaxDrawdown(analytics.dailyPrices)
+        val drawdownWarnings = analytics.warnings +
+            listOfNotNull(OutputValidator.checkMaxDrawdown(result.maxDrawdown))
+        
+        DrawdownResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            drawdown = DrawdownData(
+                maxDrawdown = result.maxDrawdown,
+                peakDate = result.peakDate,
+                troughDate = result.troughDate,
+                peakValue = result.peakValue,
+                troughValue = result.troughValue,
+                recoveryDate = findRecoveryDate(analytics.dailyPrices, result.troughDate, result.peakValue)
+            ),
+            metadata = DrawdownMetadata(
+                dataPoints = analytics.dailyPrices.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = drawdownWarnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Finds the first date after the trough where price recovers to or above the peak value, or null if no recovery. */
+    private fun findRecoveryDate(prices: List<DailyPrice>, troughDate: LocalDate, peakValue: Double): LocalDate? {
+        val afterTrough = prices.dropWhile { it.date <= troughDate }
+        return afterTrough.firstOrNull { it.close >= peakValue }?.date
     }
 
     /** Returns pairs of returns for dates that appear in both series. */
