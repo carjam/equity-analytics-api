@@ -14,6 +14,8 @@ import com.meiken.model.DailyReturn
 import com.meiken.model.DrawdownData
 import com.meiken.model.DrawdownMetadata
 import com.meiken.model.DrawdownResponse
+import com.meiken.model.MomentumMetadata
+import com.meiken.model.MomentumResponse
 import com.meiken.model.RollingCorrelation
 import com.meiken.model.SharpeMetadata
 import com.meiken.model.SharpeResponse
@@ -209,6 +211,47 @@ class AnalyticsServiceImpl(
                 outlierCount = analytics.outlierCount,
                 missingDays = analytics.missingDays,
                 warnings = calmarWarnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Momentum (Rate of Change) from cached prices: calculates ROC for multiple lookback periods. */
+    override suspend fun calculateMomentum(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        lookbacks: List<Int>
+    ): MomentumResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        require(lookbacks.isNotEmpty()) { "At least one lookback period is required" }
+        require(lookbacks.all { it > 0 }) { "All lookback periods must be positive" }
+        
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyPrices.isNotEmpty()) { "No price data available for momentum calculation" }
+        
+        val maxLookback = lookbacks.maxOrNull() ?: 0
+        require(analytics.dailyPrices.size > maxLookback) {
+            "Need more than $maxLookback price points for the requested lookback periods"
+        }
+        
+        // Calculate ROC for all lookback periods and combine
+        val allRocData = lookbacks.flatMap { lookback ->
+            FinancialCalculations.calculateRateOfChange(analytics.dailyPrices, lookback)
+        }
+        
+        MomentumResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            momentum = allRocData,
+            metadata = MomentumMetadata(
+                dataPoints = analytics.dailyPrices.size,
+                lookbacks = lookbacks,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = analytics.warnings.ifEmpty { null }
             )
         )
     }

@@ -3,10 +3,11 @@ package com.meiken.calculator
 import com.meiken.model.DailyPrice
 import com.meiken.model.DailyReturn
 import com.meiken.model.MaxDrawdownResult
+import com.meiken.model.RateOfChangeData
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe, drawdown. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
+/** Pure financial formulas: returns, volatility, alpha, beta, Sharpe, drawdown, momentum. All inputs are from close-of-day prices; uses 252 trading days for annualization. */
 object FinancialCalculations {
 
     /** Converts sorted close-of-day prices to daily returns: (curr.close - prev.close) / prev.close per pair of consecutive days. One return per date (close-to-close). */
@@ -165,5 +166,32 @@ object FinancialCalculations {
             peakValue = maxDDPeakValue,
             troughValue = maxDDTroughValue
         )
+    }
+
+    /**
+     * Rate of Change (ROC): percentage change over a lookback period.
+     * ROC[t] = (price[t] - price[t-lookback]) / price[t-lookback]
+     * Momentum indicator showing price momentum over the lookback window.
+     */
+    fun calculateRateOfChange(prices: List<DailyPrice>, lookback: Int): List<RateOfChangeData> {
+        require(lookback > 0) { "Lookback must be positive" }
+        require(prices.size > lookback) { "Need more than $lookback prices for lookback calculation" }
+        
+        val sortedPrices = prices.sortedBy { it.date }
+        val result = mutableListOf<RateOfChangeData>()
+        
+        for (i in lookback until sortedPrices.size) {
+            val currentPrice = sortedPrices[i].close
+            val pastPrice = sortedPrices[i - lookback].close
+            val roc = (currentPrice - pastPrice) / pastPrice
+            
+            result.add(RateOfChangeData(
+                date = sortedPrices[i].date,
+                rateOfChange = roc,
+                lookback = lookback
+            ))
+        }
+        
+        return result
     }
 }

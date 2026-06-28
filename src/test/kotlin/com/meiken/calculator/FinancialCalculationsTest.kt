@@ -416,4 +416,74 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculateCalmar(annualizedReturn = 0.10, maxDrawdown = -0.05)
         }
     }
+
+    @Test
+    fun `calculateRateOfChange with 20-day lookback`() {
+        // Prices: 100, 105, 110, ..., 225 (steady 5 point increase per day)
+        val prices = (1..26).map { day ->
+            DailyPrice(LocalDate(2024, 1, day), close = 95.0 + day * 5.0)
+        }
+        
+        val roc = FinancialCalculations.calculateRateOfChange(prices, lookback = 20)
+        
+        // Should have 6 ROC values (26 prices - 20 lookback = 6)
+        assertEquals(6, roc.size)
+        // First ROC at day 21: (price[20] - price[0]) / price[0] = (200 - 100) / 100 = 1.0
+        assertEquals(1.0, roc[0].rateOfChange, 0.0001)
+        // Last ROC at day 26: (price[25] - price[5]) / price[5] = (225 - 125) / 125 = 0.8
+        assertEquals(0.8, roc[5].rateOfChange, 0.0001)
+    }
+
+    @Test
+    fun `calculateRateOfChange with declining prices`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 95.0),
+            DailyPrice(LocalDate(2024, 1, 3), close = 90.0)
+        )
+        
+        val roc = FinancialCalculations.calculateRateOfChange(prices, lookback = 2)
+        
+        assertEquals(1, roc.size)
+        // (90 - 100) / 100 = -0.10
+        assertEquals(-0.10, roc[0].rateOfChange, 0.0001)
+        assertEquals(LocalDate(2024, 1, 3), roc[0].date)
+    }
+
+    @Test
+    fun `calculateRateOfChange with lookback 1 equals daily return`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        
+        val roc = FinancialCalculations.calculateRateOfChange(prices, lookback = 1)
+        
+        assertEquals(1, roc.size)
+        assertEquals(0.05, roc[0].rateOfChange, 0.0001)
+    }
+
+    @Test
+    fun `calculateRateOfChange throws when lookback exceeds price count`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateRateOfChange(prices, lookback = 5)
+        }
+    }
+
+    @Test
+    fun `calculateRateOfChange throws with invalid lookback`() {
+        val prices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateRateOfChange(prices, lookback = 0)
+        }
+    }
 }

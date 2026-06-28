@@ -19,6 +19,7 @@ import io.ktor.server.routing.route
  * - GET tickers/{symbol}/sharpe (optional risk_free_rate, from_date, to_date; default risk_free_rate from config)
  * - GET tickers/{symbol}/sortino (optional risk_free_rate, from_date, to_date; default risk_free_rate from config)
  * - GET tickers/{symbol}/calmar (optional from_date, to_date; default YTD)
+ * - GET tickers/{symbol}/momentum (optional from_date, to_date, lookback; default lookback=20; supports comma-separated list)
  * - GET tickers/{symbol}/drawdown (optional from_date, to_date; default YTD)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET correlation?ticker1=&ticker2= (optional from_date, to_date, window; default window from config)
@@ -78,6 +79,30 @@ fun Route.analyticsRoutes(
                     val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
                         ?: getToday()
                     val response = analyticsService.calculateCalmar(symbol, fromDate, toDate)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+            }
+            route("momentum") {
+                get {
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                        ?: getCurrentYearStart()
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                        ?: getToday()
+                    
+                    // Parse lookback periods (comma-separated string, default 20)
+                    val lookbacksStr = call.request.queryParameters["lookback"] ?: "20"
+                    val lookbacks = try {
+                        lookbacksStr.split(",").map { it.trim().toInt() }
+                    } catch (e: NumberFormatException) {
+                        throw BadRequestException("Invalid lookback format. Use comma-separated integers (e.g., '20' or '20,60,120')")
+                    }
+                    
+                    if (lookbacks.any { it <= 0 || it > 252 }) {
+                        throw BadRequestException("Lookback periods must be between 1 and 252 trading days")
+                    }
+                    
+                    val response = analyticsService.calculateMomentum(symbol, fromDate, toDate, lookbacks)
                     call.respond(HttpStatusCode.OK, response)
                 }
             }
