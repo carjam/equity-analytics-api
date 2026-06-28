@@ -22,14 +22,16 @@ private const val TIME_SERIES_KEY = "Time Series (Daily)"
 private const val OPEN_KEY = "1. open"
 private const val HIGH_KEY = "2. high"
 private const val LOW_KEY = "3. low"
-private const val CLOSE_KEY = "4. close"
-private const val VOLUME_KEY = "5. volume"
+private const val CLOSE_KEY = "5. adjusted close"
+private const val VOLUME_KEY = "6. volume"
 private const val ERROR_MESSAGE_KEY = "Error Message"
 private const val NOTE_KEY = "Note"
 private const val INFORMATION_KEY = "Information"
 
 /**
- * Implements [MarketDataService] using Alpha Vantage TIME_SERIES_DAILY API.
+ * Implements [MarketDataService] using Alpha Vantage TIME_SERIES_DAILY_ADJUSTED API.
+ * Close prices are split- and dividend-adjusted ("5. adjusted close"); open/high/low remain unadjusted
+ * (not used in any calculations — all metrics derive from close-to-close returns only).
  * [baseUrl], [dataQualityConfig], [rawResponseLogLimit], and [sparseRatio] come from config.
  * [outputSize]: "compact" = last ~100 trading days (~4 months, free tier); "full" = full history (premium).
  * [useLimiterMessages]: when true (non-prod), no/insufficient data throws a message suggesting upgrade; when false (prod), generic message.
@@ -49,13 +51,13 @@ class AlphaVantageService(
     private val json = Json { ignoreUnknownKeys = true }
     private val log = LoggerFactory.getLogger(AlphaVantageService::class.java)
 
-    /** Fetches close-of-day prices only: one bar per calendar day from TIME_SERIES_DAILY; uses "4. close". outputSize (compact/full) and limiter messages are config-driven. */
+    /** Fetches split- and dividend-adjusted close prices from TIME_SERIES_DAILY_ADJUSTED ("5. adjusted close"). outputSize (compact/full) and limiter messages are config-driven. */
     override suspend fun getHistoricalPrices(symbol: String, fromDate: LocalDate, toDate: LocalDate): List<DailyPrice> {
         val startNanos = System.nanoTime()
         return try {
             val response = try {
                 client.get(baseUrl) {
-                    parameter("function", "TIME_SERIES_DAILY")
+                    parameter("function", "TIME_SERIES_DAILY_ADJUSTED")
                     parameter("symbol", symbol)
                     parameter("apikey", apiKey)
                     parameter("outputsize", outputSize)

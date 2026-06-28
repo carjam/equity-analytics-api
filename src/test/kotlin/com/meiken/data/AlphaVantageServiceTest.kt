@@ -22,15 +22,15 @@ class AlphaVantageServiceTest {
             "Time Series (Daily)": {
                 "2024-01-15": {
                     "1. open": "100.0",
-                    "4. close": "100.5"
+                    "5. adjusted close": "100.5"
                 },
                 "2024-01-14": {
                     "1. open": "99.0",
-                    "4. close": "99.2"
+                    "5. adjusted close": "99.2"
                 },
                 "2024-01-13": {
                     "1. open": "98.0",
-                    "4. close": "98.8"
+                    "5. adjusted close": "98.8"
                 }
             }
         }
@@ -88,7 +88,7 @@ class AlphaVantageServiceTest {
 
     @Test
     fun `getHistoricalPrices throws DataRetrievalException with limiter message when no data in date range`() = runBlocking {
-        val responseWithOldDatesOnly = """{"Time Series (Daily)": {"2020-01-02": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
+        val responseWithOldDatesOnly = """{"Time Series (Daily)": {"2020-01-02": {"5. adjusted close": "100.0"}, "2020-01-01": {"5. adjusted close": "99.0"}}}"""
         val engine = MockEngine { respond(responseWithOldDatesOnly, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
         val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", outputSize = "compact", useLimiterMessages = true)
@@ -100,7 +100,7 @@ class AlphaVantageServiceTest {
 
     @Test
     fun `getHistoricalPrices with useLimiterMessages false throws with generic message when no data`() = runBlocking {
-        val responseWithOldDatesOnly = """{"Time Series (Daily)": {"2020-01-02": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
+        val responseWithOldDatesOnly = """{"Time Series (Daily)": {"2020-01-02": {"5. adjusted close": "100.0"}, "2020-01-01": {"5. adjusted close": "99.0"}}}"""
         val engine = MockEngine { respond(responseWithOldDatesOnly, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
         val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", outputSize = "full", useLimiterMessages = false)
@@ -123,7 +123,7 @@ class AlphaVantageServiceTest {
 
     @Test
     fun `getHistoricalPrices throws with limiter message when only one day in range`() = runBlocking {
-        val singleDayInRange = """{"Time Series (Daily)": {"2024-01-15": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
+        val singleDayInRange = """{"Time Series (Daily)": {"2024-01-15": {"5. adjusted close": "100.0"}, "2020-01-01": {"5. adjusted close": "99.0"}}}"""
         val engine = MockEngine { respond(singleDayInRange, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
         val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", useLimiterMessages = true)
@@ -135,7 +135,7 @@ class AlphaVantageServiceTest {
 
     @Test
     fun `getHistoricalPrices with useLimiterMessages false throws generic when only one day in range`() = runBlocking {
-        val singleDayInRange = """{"Time Series (Daily)": {"2024-01-15": {"4. close": "100.0"}, "2020-01-01": {"4. close": "99.0"}}}"""
+        val singleDayInRange = """{"Time Series (Daily)": {"2024-01-15": {"5. adjusted close": "100.0"}, "2020-01-01": {"5. adjusted close": "99.0"}}}"""
         val engine = MockEngine { respond(singleDayInRange, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         val client = HttpClient(engine)
         val service = AlphaVantageService(client, "test-key", baseUrl = "https://www.alphavantage.co/query", useLimiterMessages = false)
@@ -171,9 +171,9 @@ class AlphaVantageServiceTest {
     fun `getHistoricalPrices skips entries with unparseable date and uses valid entries`() = runBlocking {
         val response = """
             {"Time Series (Daily)": {
-                "bad-date": {"4. close": "100.0"},
-                "2024-01-15": {"4. close": "100.5"},
-                "2024-01-14": {"4. close": "99.2"}
+                "bad-date": {"5. adjusted close": "100.0"},
+                "2024-01-15": {"5. adjusted close": "100.5"},
+                "2024-01-14": {"5. adjusted close": "99.2"}
             }}
         """.trimIndent()
         val engine = MockEngine { respond(response, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
@@ -189,9 +189,9 @@ class AlphaVantageServiceTest {
     fun `getHistoricalPrices skips entries with non-numeric close`() = runBlocking {
         val response = """
             {"Time Series (Daily)": {
-                "2024-01-15": {"4. close": "N/A"},
-                "2024-01-14": {"4. close": "99.2"},
-                "2024-01-13": {"4. close": "98.0"}
+                "2024-01-15": {"5. adjusted close": "N/A"},
+                "2024-01-14": {"5. adjusted close": "99.2"},
+                "2024-01-13": {"5. adjusted close": "98.0"}
             }}
         """.trimIndent()
         val engine = MockEngine { respond(response, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
@@ -206,8 +206,8 @@ class AlphaVantageServiceTest {
         // Feb 2024 has many trading days; return only 2 points so ratio < 0.5
         val response = """
             {"Time Series (Daily)": {
-                "2024-02-01": {"4. close": "100.0"},
-                "2024-02-02": {"4. close": "100.5"}
+                "2024-02-01": {"5. adjusted close": "100.0"},
+                "2024-02-02": {"5. adjusted close": "100.5"}
             }}
         """.trimIndent()
         val engine = MockEngine { respond(response, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }

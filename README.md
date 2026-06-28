@@ -47,6 +47,8 @@ Alpha Vantage output size and “limiter” error messages are **config-driven**
 - **Non-prod:** Uses `outputsize=compact` (free-tier compatible) and turns on the limiter: if the date range is beyond what compact provides (or has insufficient data), the API returns a helpful message suggesting an upgrade for longer history.
 - **Prod:** Uses `outputsize=full` (no date window limit) and turns off the limiter; missing or insufficient data returns a generic error.
 
+> **Note — adjusted prices and premium key:** The API uses `TIME_SERIES_DAILY_ADJUSTED` so that close prices are split- and dividend-adjusted (preventing spurious return spikes on corporate action dates). This endpoint works on a free-tier key with `outputsize=compact`. However, `outputsize=full` (production mode, for full price history beyond ~4 months) **requires a premium Alpha Vantage API key**. If a premium key is not available, leave the environment as `development` and requests will be limited to the most recent ~100 trading days.
+
 **How to set:**
 
 - **Config file** (`src/main/resources/application.conf`): set `meiken.environment = "production"` for production.
