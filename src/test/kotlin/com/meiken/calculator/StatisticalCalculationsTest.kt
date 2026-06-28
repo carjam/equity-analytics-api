@@ -24,15 +24,17 @@ class StatisticalCalculationsTest {
     }
 
     @Test
-    fun `variance with single value is zero`() {
-        assertEquals(0.0, StatisticalCalculations.variance(listOf(10.0)), 0.0001)
+    fun `variance with single value throws`() {
+        assertThrows<IllegalArgumentException> {
+            StatisticalCalculations.variance(listOf(10.0))
+        }
     }
 
     @Test
     fun `variance with known values`() {
-        // Values 2, 4, 4, 4, 5, 5, 7, 9 -> mean = 5, variance = 4
+        // Values 2, 4, 4, 4, 5, 5, 7, 9 -> mean=5, Σ(xi-5)²=32, sample variance=32/7 ≈ 4.5714
         val values = listOf(2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0)
-        assertEquals(4.0, StatisticalCalculations.variance(values), 0.0001)
+        assertEquals(32.0 / 7.0, StatisticalCalculations.variance(values), 0.0001)
     }
 
     @Test
@@ -44,8 +46,9 @@ class StatisticalCalculationsTest {
 
     @Test
     fun `standardDeviation is sqrt of variance`() {
-        // Variance of 4 -> std dev 2
-        assertEquals(2.0, StatisticalCalculations.standardDeviation(listOf(2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0)), 0.0001)
+        // Sample variance=32/7; std dev=sqrt(32/7) ≈ 2.1381
+        val values = listOf(2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0)
+        assertEquals(kotlin.math.sqrt(32.0 / 7.0), StatisticalCalculations.standardDeviation(values), 0.0001)
     }
 
     @Test
