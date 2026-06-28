@@ -157,7 +157,7 @@ class SymbolAnalyticsCacheService(
             Metrics.recordOutliersDetected(outlierIndices.size, symbol)
             val avgDailyReturn = returnValues.average()
             val (dailyVol, annualizedVol) = FinancialCalculations.calculateVolatility(returnValues, tradingDays)
-            val annualizedReturn = FinancialCalculations.annualizeReturn(avgDailyReturn, tradingDays)
+            val annualizedReturn = FinancialCalculations.annualizeReturn(returnValues, tradingDays)
             // Data quality: expected trading days (US calendar), missing count, gap runs, quality level, warnings.
             val expectedTradingDays = MarketCalendar.getTradingDays(fromDate, toDate)
             val actualDays = prices.size

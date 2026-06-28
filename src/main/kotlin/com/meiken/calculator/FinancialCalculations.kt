@@ -16,9 +16,16 @@ object FinancialCalculations {
         }
     }
 
-    /** Compounds average daily return (from close-of-day returns) to annual: (1 + avgDaily)^tradingDays - 1. */
+    /** Compounds a scalar daily return to annual: (1 + avgDaily)^tradingDays - 1. Use for single-value quantities like OLS alpha. */
     fun annualizeReturn(avgDailyReturn: Double, tradingDays: Int = 252): Double {
         return (1 + avgDailyReturn).pow(tradingDays.toDouble()) - 1
+    }
+
+    /** Geometric-mean annualization: (∏(1+r_t))^(tradingDays/n) - 1. Corrects the arithmetic-mean upward bias of ~σ²/2 per year (Jensen's inequality). */
+    fun annualizeReturn(returns: List<Double>, tradingDays: Int = 252): Double {
+        require(returns.isNotEmpty()) { "Returns list cannot be empty" }
+        val grossProduct = returns.fold(1.0) { acc, r -> acc * (1.0 + r) }
+        return grossProduct.pow(tradingDays.toDouble() / returns.size) - 1.0
     }
 
     /**
@@ -59,7 +66,7 @@ object FinancialCalculations {
 
     /** Sharpe = (annualized return - riskFreeRate) / annualized volatility. Expects daily returns from close-of-day prices. Fails if volatility is zero. */
     fun calculateSharpe(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double {
-        val annualizedReturn = annualizeReturn(returns.average(), tradingDays)
+        val annualizedReturn = annualizeReturn(returns, tradingDays)
         val (_, annualizedVol) = calculateVolatility(returns, tradingDays)
         require(annualizedVol != 0.0) { "Volatility cannot be zero" }
         return (annualizedReturn - riskFreeRate) / annualizedVol

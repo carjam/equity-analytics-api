@@ -4,6 +4,7 @@ import com.meiken.model.DailyPrice
 import kotlinx.datetime.LocalDate
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import kotlin.math.pow
 import kotlin.test.assertEquals
 
 class FinancialCalculationsTest {
@@ -123,6 +124,32 @@ class FinancialCalculationsTest {
     fun `annualizeReturn with default trading days`() {
         val annualized = FinancialCalculations.annualizeReturn(0.001)
         assertEquals(0.2872, annualized, 0.001)
+    }
+
+    @Test
+    fun `annualizeReturn list uses geometric mean less than arithmetic for volatile series`() {
+        // [+10%, -10%] has arithmetic mean 0, but geometric mean < 0 (variance drag)
+        val returns = listOf(0.1, -0.1)
+        val geometric = FinancialCalculations.annualizeReturn(returns, 252)
+        val arithmetic = FinancialCalculations.annualizeReturn(returns.average(), 252)
+        assert(geometric < arithmetic) { "Expected geometric ($geometric) < arithmetic ($arithmetic)" }
+        // Product = 1.1 * 0.9 = 0.99 per 2 days; annualized = 0.99^126 - 1 ≈ -0.719
+        assertEquals(0.99.pow(126.0) - 1.0, geometric, 0.0001)
+    }
+
+    @Test
+    fun `annualizeReturn list with constant returns matches scalar form`() {
+        val constant = List(30) { 0.001 }
+        val listResult = FinancialCalculations.annualizeReturn(constant, 252)
+        val scalarResult = FinancialCalculations.annualizeReturn(0.001, 252)
+        assertEquals(scalarResult, listResult, 0.0001)
+    }
+
+    @Test
+    fun `annualizeReturn list with empty list throws`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.annualizeReturn(emptyList(), 252)
+        }
     }
 
     @Test

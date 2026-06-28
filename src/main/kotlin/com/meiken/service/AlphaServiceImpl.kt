@@ -59,8 +59,8 @@ class AlphaServiceImpl(
         val targetValues = alignedTarget.map { it.returnValue }
         val benchmarkValues = alignedBenchmark.map { it.returnValue }
         val (alphaValue, beta) = FinancialCalculations.calculateAlpha(targetValues, benchmarkValues, riskFreeRate, tradingDaysPerYear)
-        val targetAnnualized = FinancialCalculations.annualizeReturn(targetValues.average(), tradingDaysPerYear)
-        val benchmarkAnnualized = FinancialCalculations.annualizeReturn(benchmarkValues.average(), tradingDaysPerYear)
+        val targetAnnualized = FinancialCalculations.annualizeReturn(targetValues, tradingDaysPerYear)
+        val benchmarkAnnualized = FinancialCalculations.annualizeReturn(benchmarkValues, tradingDaysPerYear)
 
         val worstQuality = listOf(targetAnalytics.dataQuality, benchmarkAnalytics.dataQuality)
             .minByOrNull { when (it) { "POOR" -> 0; "ACCEPTABLE" -> 1; else -> 2 } } ?: "GOOD"
