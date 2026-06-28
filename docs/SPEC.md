@@ -82,7 +82,9 @@ daily_return = (price_today - price_yesterday) / price_yesterday
   "alpha": 0.0523,
   "metadata": {
     "dataPoints": 252,
-    "calculationMethod": "annualized_excess_return",
+    "calculationMethod": "jensens_alpha_ols",
+    "riskFreeRate": 0.04,
+    "beta": 1.12,
     "targetAnnualizedReturn": 0.2845,
     "benchmarkAnnualizedReturn": 0.2322,
     "dataQuality": "GOOD",
@@ -93,14 +95,16 @@ daily_return = (price_today - price_yesterday) / price_yesterday
 }
 ```
 
-**Alpha Calculation**:
-Alpha represents the excess return of the target relative to the benchmark:
+**Alpha Calculation** (Jensen's alpha via OLS):
+Alpha is computed via OLS single-factor regression: `(target − rf) = α + β(benchmark − rf) + ε`.
 ```
-1. Calculate daily returns for both target and benchmark
-2. Compute average daily returns
-3. Annualize returns: annualized = (1 + avg_daily_return)^252 - 1
-4. Alpha = annualized_return_target - annualized_return_benchmark
+1. Calculate daily returns for both target and benchmark (close-to-close)
+2. β = cov(target, benchmark) / var(benchmark)   [sample covariance/variance, N-1]
+3. rf_daily = (1 + riskFreeRate)^(1/252) − 1
+4. α_daily = mean(target) − β × mean(benchmark) − rf_daily × (1 − β)
+5. α_annualized = (1 + α_daily)^252 − 1   [geometric annualization]
 ```
+Outlier returns are winsorized at ±3σ before calculation to prevent data errors from distorting the regression.
 
 **Error Responses**:
 - `400 Bad Request`: Missing parameters, invalid dates, insufficient data
@@ -157,6 +161,41 @@ Calculates rolling correlation between two tickers.
 **Query Parameters**:
 - `ticker1`, `ticker2`: The two tickers to compare
 - `window` (optional): Rolling window in days (default: 30)
+
+#### 3.5 Get Sortino Ratio
+**Endpoint**: `GET /api/v1/tickers/{symbol}/sortino`
+
+Like Sharpe ratio, but divides excess return by downside deviation only (semi-deviation of negative returns, annualized). Penalizes only harmful volatility.
+
+**Query Parameters**:
+- `risk_free_rate` (optional): Annual risk-free rate (default: 0.04)
+
+**Sortino Calculation**:
+```
+downside_deviation = sqrt(mean(r_t^2 for r_t < 0)) × sqrt(252)
+sortino = (annualized_return - risk_free_rate) / downside_deviation
+```
+
+#### 3.6 Get Calmar Ratio
+**Endpoint**: `GET /api/v1/tickers/{symbol}/calmar`
+
+Return earned per unit of maximum drawdown risk. `+∞` when drawdown is zero and return is positive (valid).
+
+**Calmar Calculation**:
+```
+calmar = annualized_return / max_drawdown
+```
+
+#### 3.7 Get Maximum Drawdown
+**Endpoint**: `GET /api/v1/tickers/{symbol}/drawdown`
+
+Largest peak-to-trough decline in the close-of-day price series. Returns peak date, trough date, their values, and the first recovery date (if any).
+
+**Max Drawdown Calculation**:
+```
+For each price, track running peak. drawdown_t = (peak - price_t) / peak.
+maxDrawdown = max(drawdown_t) over all t.
+```
 
 ---
 

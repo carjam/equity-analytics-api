@@ -102,6 +102,82 @@ class OutputValidatorTest {
         assertTrue(OutputValidator.checkAnnualizedVolatility(Double.NaN)!!.contains("not_finite"))
     }
 
+    // --- Max Drawdown ---
+
+    @Test
+    fun `checkMaxDrawdown returns null for values within normal range`() {
+        assertNull(OutputValidator.checkMaxDrawdown(0.0))
+        assertNull(OutputValidator.checkMaxDrawdown(0.3))
+        assertNull(OutputValidator.checkMaxDrawdown(0.99))
+    }
+
+    @Test
+    fun `checkMaxDrawdown returns warning for negative drawdown`() {
+        assertNotNull(OutputValidator.checkMaxDrawdown(-0.01))
+        assertTrue(OutputValidator.checkMaxDrawdown(-0.5)!!.contains("max_drawdown_negative"))
+    }
+
+    @Test
+    fun `checkMaxDrawdown returns warning for extreme drawdown above 99 percent`() {
+        assertNotNull(OutputValidator.checkMaxDrawdown(1.0))
+        assertTrue(OutputValidator.checkMaxDrawdown(1.0)!!.contains("max_drawdown_extreme"))
+    }
+
+    @Test
+    fun `checkMaxDrawdown returns warning for non-finite values`() {
+        assertTrue(OutputValidator.checkMaxDrawdown(Double.NaN)!!.contains("not_finite"))
+    }
+
+    // --- Sortino ---
+
+    @Test
+    fun `checkSortino returns null for values within normal range`() {
+        assertNull(OutputValidator.checkSortino(0.0))
+        assertNull(OutputValidator.checkSortino(2.5))
+        assertNull(OutputValidator.checkSortino(-2.5))
+        assertNull(OutputValidator.checkSortino(4.9))
+    }
+
+    @Test
+    fun `checkSortino returns warning for values outside normal range`() {
+        assertNotNull(OutputValidator.checkSortino(6.0))
+        assertNotNull(OutputValidator.checkSortino(-6.0))
+        assertTrue(OutputValidator.checkSortino(10.0)!!.contains("sortino_implausible"))
+    }
+
+    @Test
+    fun `checkSortino returns warning for non-finite values`() {
+        assertTrue(OutputValidator.checkSortino(Double.NaN)!!.contains("not_finite"))
+        assertTrue(OutputValidator.checkSortino(Double.POSITIVE_INFINITY)!!.contains("not_finite"))
+    }
+
+    // --- Calmar ---
+
+    @Test
+    fun `checkCalmar returns null for values within normal range`() {
+        assertNull(OutputValidator.checkCalmar(0.0))
+        assertNull(OutputValidator.checkCalmar(5.0))
+        assertNull(OutputValidator.checkCalmar(-5.0))
+        assertNull(OutputValidator.checkCalmar(10.0))
+    }
+
+    @Test
+    fun `checkCalmar returns null for positive infinity (zero drawdown case)`() {
+        assertNull(OutputValidator.checkCalmar(Double.POSITIVE_INFINITY))
+    }
+
+    @Test
+    fun `checkCalmar returns warning for values outside normal range`() {
+        assertNotNull(OutputValidator.checkCalmar(11.0))
+        assertNotNull(OutputValidator.checkCalmar(-11.0))
+        assertTrue(OutputValidator.checkCalmar(20.0)!!.contains("calmar_implausible"))
+    }
+
+    @Test
+    fun `checkCalmar returns warning for NaN`() {
+        assertTrue(OutputValidator.checkCalmar(Double.NaN)!!.contains("calmar_not_defined"))
+    }
+
     // --- Warning string format ---
 
     @Test

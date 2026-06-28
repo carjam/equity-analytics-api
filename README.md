@@ -1,10 +1,10 @@
 # Equity Analytics API
 
-A Kotlin/Ktor REST API for financial analytics: daily returns, alpha, volatility, beta, Sharpe ratio, and rolling correlation. Uses Alpha Vantage for real market data (or mock data when no API key is set).
+A Kotlin/Ktor REST API for financial analytics: daily returns, Jensen's alpha, volatility, beta, Sharpe ratio, Sortino ratio, Calmar ratio, maximum drawdown, and rolling correlation. Uses Alpha Vantage for real market data (or mock data when no API key is set).
 
 > **Portfolio Project:** Demonstration of production-grade financial analytics API engineering. Source code available for review only. See [LICENSE](LICENSE) and [docs/NOTICE.md](docs/NOTICE.md) for terms. Repository: [github.com/carjam/equity-analytics-api](https://github.com/carjam/equity-analytics-api)
 
-**All calculations use close-of-day (close-of-date) prices only:** one price per calendar day per ticker (the daily closing price). Returns are day-over-day close-to-close; volatility, alpha, beta, Sharpe, and correlation are derived from those daily close-based returns.
+**All calculations use close-of-day (close-of-date) prices only:** one price per calendar day per ticker (the daily closing price). Returns are day-over-day close-to-close; volatility, alpha, beta, Sharpe, Sortino, Calmar, and correlation are derived from those daily close-based returns. Maximum drawdown is computed directly from close-of-day prices.
 
 ## Quick Start
 
@@ -66,9 +66,10 @@ Default is `development` (non-production), so local and test runs use compact an
 
 ## Data and calculations
 
-- **Prices:** Close-of-day only. One closing price per calendar day per ticker (from Alpha Vantage TIME_SERIES_DAILY or mock).
+- **Prices:** Close-of-day only. One closing price per calendar day per ticker (from Alpha Vantage `TIME_SERIES_DAILY_ADJUSTED` or mock). Adjusted prices correct for splits and dividends, preventing spurious return spikes on corporate action dates.
 - **Returns:** Day-over-day percentage change: `(close_t - close_{t-1}) / close_{t-1}`.
-- **Volatility, alpha, beta, Sharpe, correlation:** All computed from these close-of-day returns (no intraday or open/high/low).
+- **Volatility, alpha, beta, Sharpe, Sortino, correlation:** All computed from these close-of-day returns (no intraday or open/high/low).
+- **Calmar, maximum drawdown:** Computed from the close-of-day price series directly.
 
 ### Market data and calendar
 
@@ -77,7 +78,7 @@ Default is `development` (non-production), so local and test runs use compact an
 
 ## Analytics cache and concurrency
 
-The API is built for **high concurrency and availability**. Analytics (returns, alpha, volatility, beta, Sharpe, correlation) share a single **SymbolAnalytics** cache per symbol/date-range:
+The API is built for **high concurrency and availability**. Analytics (returns, alpha, volatility, beta, Sharpe, Sortino, Calmar, drawdown, correlation) share a single **SymbolAnalytics** cache per symbol/date-range:
 
 - **Thread-safe:** Cache hits are **lock-free** (Caffeine is thread-safe); many requests for different keys are served in parallel.
 - **Per-key coalescing on miss:** When the cache misses for a key, only **one** request computes (fetches prices and calculates metrics); other concurrent requests for the **same** key wait for that result instead of triggering duplicate API calls (no thundering herd). Requests for **different** keys compute in parallel.
@@ -101,8 +102,11 @@ Beyond the required **Returns** and **Alpha** endpoints, the following analytics
 | **Sharpe ratio** | Risk-adjusted return: (annualized return − risk-free rate) / annualized volatility. Lets users compare returns per unit of risk; configurable risk-free rate. |
 | **Beta**       | Sensitivity of target to benchmark: covariance(target, benchmark) / variance(benchmark). Standard measure of systematic (market) risk relative to a benchmark. |
 | **Rolling correlation** | Correlation between two tickers over a configurable window. Surfaces how closely two series move together over time; useful for diversification and pair strategies. |
+| **Sortino ratio** | Like Sharpe, but divides excess return by downside deviation only (semi-deviation of negative returns). Penalizes only harmful volatility; useful when return distributions are asymmetric. |
+| **Calmar ratio** | Annualized return divided by maximum drawdown. Measures return earned per unit of worst-case drawdown; commonly used to evaluate trend-following and managed-futures strategies. |
+| **Maximum drawdown** | Largest peak-to-trough decline in the price series, with peak/trough dates and optional recovery date. Standard measure of tail risk and worst-case loss for a period. |
 
-All four reuse the same **close-of-day returns** and **SymbolAnalytics** cache as Returns and Alpha, so there is no extra market-data cost and behavior stays consistent (precision, date alignment, numerical stability).
+All seven reuse the same **close-of-day prices/returns** and **SymbolAnalytics** cache as Returns and Alpha, so there is no extra market-data cost and behavior stays consistent (precision, date alignment, numerical stability).
 
 ## API Endpoints
 
@@ -126,7 +130,7 @@ curl "http://localhost:8080/api/v1/tickers/AAPL/returns"
 curl "http://localhost:8080/api/v1/tickers/AAPL/returns?from_date=2024-01-01&to_date=2024-06-30"
 ```
 
-### Alpha (excess return vs benchmark; close-of-day returns)
+### Alpha (Jensen's alpha via OLS; close-of-day returns)
 
 ```bash
 curl "http://localhost:8080/api/v1/alpha?target=AAPL&benchmark=SPY"
@@ -163,6 +167,74 @@ curl "http://localhost:8080/api/v1/correlation?ticker1=AAPL&ticker2=SPY"
 # Custom window
 curl "http://localhost:8080/api/v1/correlation?ticker1=AAPL&ticker2=SPY&window=60&from_date=2024-01-01&to_date=2024-06-30"
 ```
+
+### Sortino Ratio (from close-of-day returns)
+
+```bash
+# Default risk-free rate 0.04
+curl "http://localhost:8080/api/v1/tickers/AAPL/sortino"
+# Custom risk-free rate
+curl "http://localhost:8080/api/v1/tickers/AAPL/sortino?risk_free_rate=0.02"
+```
+
+### Calmar Ratio (from close-of-day prices)
+
+```bash
+curl "http://localhost:8080/api/v1/tickers/AAPL/calmar"
+curl "http://localhost:8080/api/v1/tickers/AAPL/calmar?from_date=2024-01-01&to_date=2024-12-31"
+```
+
+### Maximum Drawdown (from close-of-day prices)
+
+```bash
+curl "http://localhost:8080/api/v1/tickers/AAPL/drawdown"
+curl "http://localhost:8080/api/v1/tickers/AAPL/drawdown?from_date=2024-01-01&to_date=2024-12-31"
+```
+
+## Calculation Methodology
+
+### Jensen's Alpha (OLS)
+
+Alpha is computed via OLS single-factor regression of excess returns: `(target − rf) = α + β(benchmark − rf) + ε`. Since the risk-free rate is a constant daily shift it cancels in covariance and variance, so:
+
+```
+β = cov(target, benchmark) / var(benchmark)
+α_daily = mean(target) − β × mean(benchmark) − rf_daily × (1 − β)
+α_annualized = (1 + α_daily)^252 − 1
+```
+
+where `rf_daily = (1 + riskFreeRate)^(1/252) − 1`. The response also includes beta and the target/benchmark annualized returns for transparency.
+
+### Geometric Mean Annualization
+
+Return series are annualized using the geometric mean (compound growth rate):
+
+```
+annualized = (∏(1 + r_t))^(252/n) − 1
+```
+
+This is mathematically correct for compound returns and avoids the ~σ²/2 per year upward bias introduced by arithmetically annualizing the mean daily return (Jensen's inequality).
+
+### Sample Statistics (N-1)
+
+Variance, standard deviation, and covariance all use N-1 (Bessel's correction) as denominator — the unbiased estimators for a sample drawn from a larger population. This is standard for financial returns estimated from a finite time window.
+
+### Outlier Winsorization
+
+Rather than removing outlier returns, the API **winsorizes** them (caps extreme values at ±Nσ, default 3σ). This preserves series length and date alignment across symbols — critical for beta and alpha, which require paired returns on the same dates. Removed points would cause misalignment. Winsorized values are used for all numeric calculations; raw returns are still returned in the response for transparency. The count of winsorized observations appears in `metadata.outlierCount`.
+
+### Plausibility Checks
+
+Every calculated metric is run through soft plausibility checks (never reject — only warn). Warnings are appended to `metadata.warnings` so callers can decide whether to trust the value. Bounds reflect convention for exchange-listed equities and ETFs:
+
+| Metric | Warning range |
+|--------|--------------|
+| Sharpe / Sortino | outside [−5, 5] |
+| Beta | outside [−3, 3] |
+| Alpha (annualized OLS) | outside [−1, 1] |
+| Annualized volatility | outside [0.05, 3.0] |
+| Max drawdown | negative or > 0.99 |
+| Calmar | outside [−10, 10] (NaN = undefined; ±∞ = valid) |
 
 ## Error Responses
 

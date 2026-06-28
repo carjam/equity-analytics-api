@@ -107,4 +107,70 @@ class AnalyticsRoutesTest {
         val response = client.get("/api/v1/correlation?ticker1=AAPL&ticker2=SPY&window=1")
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
+
+    @Test
+    fun `sortino returns 200 with valid JSON`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/sortino")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("symbol"))
+        assertTrue(body.contains("sortino"))
+        assertTrue(body.contains("riskFreeRate"))
+        val json = Json.parseToJsonElement(body).jsonObject
+        assertEquals("AAPL", json["symbol"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `sortino invalid symbol returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/TOOLONG/sortino")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `calmar returns 200 with valid JSON`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/calmar")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("symbol"))
+        assertTrue(body.contains("calmar"))
+        assertTrue(body.contains("maxDrawdown"))
+        val json = Json.parseToJsonElement(body).jsonObject
+        assertEquals("AAPL", json["symbol"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `calmar invalid symbol returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/TOOLONG/calmar")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `drawdown returns 200 with valid JSON`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/drawdown")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("symbol"))
+        assertTrue(body.contains("drawdown"))
+        assertTrue(body.contains("maxDrawdown"))
+        val json = Json.parseToJsonElement(body).jsonObject
+        assertEquals("AAPL", json["symbol"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `drawdown invalid symbol returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/TOOLONG/drawdown")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
 }
