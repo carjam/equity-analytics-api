@@ -278,4 +278,31 @@ object FinancialCalculations {
         val currentPrice = sortedPrices.last().close
         return (currentPrice - mean) / stdDev
     }
+
+    /**
+     * Relative Strength: measures relative performance of target vs benchmark over the period.
+     * RS = (target_end / target_start) / (benchmark_end / benchmark_start) - 1
+     * Positive values indicate outperformance, negative indicate underperformance.
+     */
+    fun calculateRelativeStrength(targetPrices: List<DailyPrice>, benchmarkPrices: List<DailyPrice>): Double {
+        require(targetPrices.isNotEmpty()) { "Cannot calculate relative strength with empty target prices" }
+        require(benchmarkPrices.isNotEmpty()) { "Cannot calculate relative strength with empty benchmark prices" }
+        require(targetPrices.size == benchmarkPrices.size) { "Target and benchmark must have same number of prices" }
+        
+        val sortedTarget = targetPrices.sortedBy { it.date }
+        val sortedBenchmark = benchmarkPrices.sortedBy { it.date }
+        
+        val targetStart = sortedTarget.first().close
+        val targetEnd = sortedTarget.last().close
+        val benchmarkStart = sortedBenchmark.first().close
+        val benchmarkEnd = sortedBenchmark.last().close
+        
+        require(targetStart > 0.0 && benchmarkStart > 0.0) { "Start prices must be positive" }
+        require(benchmarkEnd > 0.0) { "Benchmark end price must be positive" }
+        
+        val targetReturn = targetEnd / targetStart
+        val benchmarkReturn = benchmarkEnd / benchmarkStart
+        
+        return (targetReturn / benchmarkReturn) - 1.0
+    }
 }

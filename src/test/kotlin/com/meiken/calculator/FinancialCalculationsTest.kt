@@ -709,4 +709,80 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculateZScore(prices, window = 1)
         }
     }
+
+    @Test
+    fun `calculateRelativeStrength with outperforming stock`() {
+        // Target: 100 -> 120 (+20%)
+        // Benchmark: 100 -> 110 (+10%)
+        // RS = 1.20 / 1.10 - 1 = 0.0909 (9.09% outperformance)
+        val targetPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 120.0)
+        )
+        val benchmarkPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 110.0)
+        )
+        
+        val rs = FinancialCalculations.calculateRelativeStrength(targetPrices, benchmarkPrices)
+        
+        assertEquals(0.0909, rs, 0.001)
+    }
+
+    @Test
+    fun `calculateRelativeStrength with underperforming stock`() {
+        // Target: 100 -> 105 (+5%)
+        // Benchmark: 100 -> 115 (+15%)
+        // RS = 1.05 / 1.15 - 1 = -0.087 (-8.7% underperformance)
+        val targetPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        val benchmarkPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 115.0)
+        )
+        
+        val rs = FinancialCalculations.calculateRelativeStrength(targetPrices, benchmarkPrices)
+        
+        assertEquals(-0.087, rs, 0.001)
+    }
+
+    @Test
+    fun `calculateRelativeStrength with matching performance returns zero`() {
+        val targetPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 110.0)
+        )
+        val benchmarkPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 50.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 55.0)  // same +10%
+        )
+        
+        val rs = FinancialCalculations.calculateRelativeStrength(targetPrices, benchmarkPrices)
+        
+        assertEquals(0.0, rs, 0.0001)
+    }
+
+    @Test
+    fun `calculateRelativeStrength throws with mismatched sizes`() {
+        val targetPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0),
+            DailyPrice(LocalDate(2024, 1, 2), close = 105.0)
+        )
+        val benchmarkPrices = listOf(
+            DailyPrice(LocalDate(2024, 1, 1), close = 100.0)
+        )
+        
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateRelativeStrength(targetPrices, benchmarkPrices)
+        }
+    }
+
+    @Test
+    fun `calculateRelativeStrength throws with empty lists`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateRelativeStrength(emptyList(), emptyList())
+        }
+    }
 }

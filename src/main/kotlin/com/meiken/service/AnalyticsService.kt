@@ -4,6 +4,7 @@ import com.meiken.model.BetaResponse
 import com.meiken.model.CalmarResponse
 import com.meiken.model.CorrelationResponse
 import com.meiken.model.DrawdownResponse
+import com.meiken.model.RelativeStrengthResponse
 import com.meiken.model.MomentumResponse
 import com.meiken.model.MovingAverageResponse
 import com.meiken.model.SharpeResponse
@@ -32,6 +33,8 @@ interface AnalyticsService {
     suspend fun calculatePriceLevels(symbol: String, fromDate: LocalDate, toDate: LocalDate): com.meiken.model.PriceLevelsResponse
     /** Z-Score: standard deviations from mean price over window (mean reversion indicator). */
     suspend fun calculateZScore(symbol: String, fromDate: LocalDate, toDate: LocalDate, window: Int): ZScoreResponse
+    /** Relative strength: measures outperformance/underperformance vs benchmark over period. */
+    suspend fun calculateRelativeStrength(target: String, benchmark: String, fromDate: LocalDate, toDate: LocalDate): RelativeStrengthResponse
     /** Rolling correlation from close-of-day returns: for each window, correlation of the two return series; date = end of window. */
     suspend fun calculateCorrelation(ticker1: String, ticker2: String, fromDate: LocalDate, toDate: LocalDate, window: Int): CorrelationResponse
     /** Maximum drawdown: largest peak-to-trough decline as percentage from close prices. */

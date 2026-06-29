@@ -21,6 +21,8 @@ import com.meiken.model.MovingAverageResponse
 import com.meiken.model.PriceLevels
 import com.meiken.model.PriceLevelsMetadata
 import com.meiken.model.PriceLevelsResponse
+import com.meiken.model.RelativeStrengthMetadata
+import com.meiken.model.RelativeStrengthResponse
 import com.meiken.model.RollingCorrelation
 import com.meiken.model.SharpeMetadata
 import com.meiken.model.SharpeResponse
@@ -381,6 +383,59 @@ class AnalyticsServiceImpl(
                 outlierCount = analytics.outlierCount,
                 missingDays = analytics.missingDays,
                 warnings = analytics.warnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Relative Strength from cached prices: relative performance of target vs benchmark. */
+    override suspend fun calculateRelativeStrength(
+        target: String,
+        benchmark: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): RelativeStrengthResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        
+        val targetAnalytics = async { analyticsCache.getOrCompute(target, fromDate, toDate, marketDataService) }
+        val benchmarkAnalytics = async { analyticsCache.getOrCompute(benchmark, fromDate, toDate, marketDataService) }
+        
+        val targetData = targetAnalytics.await()
+        val benchmarkData = benchmarkAnalytics.await()
+        
+        require(targetData.dailyPrices.isNotEmpty()) { "No price data available for target $target" }
+        require(benchmarkData.dailyPrices.isNotEmpty()) { "No price data available for benchmark $benchmark" }
+        
+        // Align dates
+        val targetMap = targetData.dailyPrices.associateBy { it.date }
+        val benchmarkMap = benchmarkData.dailyPrices.associateBy { it.date }
+        val commonDates = targetMap.keys.intersect(benchmarkMap.keys).sorted()
+        
+        require(commonDates.isNotEmpty()) { "No common dates between $target and $benchmark" }
+        
+        val alignedTarget = commonDates.map { targetMap[it]!! }
+        val alignedBenchmark = commonDates.map { benchmarkMap[it]!! }
+        
+        val relativeStrength = FinancialCalculations.calculateRelativeStrength(alignedTarget, alignedBenchmark)
+        
+        // Calculate individual returns
+        val targetReturn = (alignedTarget.last().close / alignedTarget.first().close) - 1.0
+        val benchmarkReturn = (alignedBenchmark.last().close / alignedBenchmark.first().close) - 1.0
+        
+        RelativeStrengthResponse(
+            target = target,
+            benchmark = benchmark,
+            fromDate = fromDate,
+            toDate = toDate,
+            relativeStrength = relativeStrength,
+            targetReturn = targetReturn,
+            benchmarkReturn = benchmarkReturn,
+            metadata = RelativeStrengthMetadata(
+                dataPoints = alignedTarget.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = targetData.dataQuality,
+                outlierCount = targetData.outlierCount,
+                missingDays = targetData.missingDays,
+                warnings = targetData.warnings.ifEmpty { null }
             )
         )
     }
