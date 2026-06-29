@@ -24,8 +24,10 @@ import io.ktor.server.routing.route
  * - GET tickers/{symbol}/price-levels (optional from_date, to_date; default YTD; 52-week high/low)
  * - GET tickers/{symbol}/z-score (optional from_date, to_date, window; default window=60)
  * - GET tickers/{symbol}/drawdown (optional from_date, to_date; default YTD)
+ * - GET tickers/{symbol}/treynor?benchmark= (optional risk_free_rate, from_date, to_date)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET relative-strength?target=&benchmark= (optional from_date, to_date)
+ * - GET information-ratio?target=&benchmark= (optional from_date, to_date)
  * - GET correlation?ticker1=&ticker2= (optional from_date, to_date, window; default window from config)
  * Symbols 1-5 alphanumeric; dates YYYY-MM-DD; errors -> 400/404/500.
  */
@@ -171,6 +173,23 @@ fun Route.analyticsRoutes(
                     call.respond(HttpStatusCode.OK, response)
                 }
             }
+            route("treynor") {
+                get {
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val benchmark = InputValidator.validateSymbol(
+                        call.request.queryParameters["benchmark"] ?: throw BadRequestException("benchmark parameter is required"),
+                        "benchmark", maxLength = maxStringLength
+                    )
+                    val riskFreeRate = call.request.queryParameters["risk_free_rate"]?.toDoubleOrNull()
+                        ?: riskFreeRateDefault
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                        ?: getCurrentYearStart()
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                        ?: getToday()
+                    val response = analyticsService.calculateTreynor(symbol, benchmark, fromDate, toDate, riskFreeRate)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+            }
         }
     }
         route("beta") {
@@ -194,6 +213,18 @@ fun Route.analyticsRoutes(
                 val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
                     ?: getToday()
                 val response = analyticsService.calculateRelativeStrength(target, benchmark, fromDate, toDate)
+                call.respond(HttpStatusCode.OK, response)
+            }
+        }
+        route("information-ratio") {
+            get {
+                val target = InputValidator.validateSymbol(call.request.queryParameters["target"], "target", maxLength = maxStringLength)
+                val benchmark = InputValidator.validateSymbol(call.request.queryParameters["benchmark"], "benchmark", maxLength = maxStringLength)
+                val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                    ?: getCurrentYearStart()
+                val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                    ?: getToday()
+                val response = analyticsService.calculateInformationRatio(target, benchmark, fromDate, toDate)
                 call.respond(HttpStatusCode.OK, response)
             }
         }

@@ -785,4 +785,112 @@ class FinancialCalculationsTest {
             FinancialCalculations.calculateRelativeStrength(emptyList(), emptyList())
         }
     }
+
+    // --- Treynor Ratio ---
+
+    @Test
+    fun `calculateTreynor with beta 1 returns excess return`() {
+        // treynor = (0.12 - 0.04) / 1.0 = 0.08
+        val treynor = FinancialCalculations.calculateTreynor(
+            annualizedReturn = 0.12, riskFreeRate = 0.04, beta = 1.0
+        )
+        assertEquals(0.08, treynor, 0.0001)
+    }
+
+    @Test
+    fun `calculateTreynor with high beta reduces ratio`() {
+        // treynor = (0.12 - 0.04) / 2.0 = 0.04
+        val treynor = FinancialCalculations.calculateTreynor(
+            annualizedReturn = 0.12, riskFreeRate = 0.04, beta = 2.0
+        )
+        assertEquals(0.04, treynor, 0.0001)
+    }
+
+    @Test
+    fun `calculateTreynor with negative beta inverse relationship`() {
+        // Inverse ETF: beta = -1.0, return = 0.04, rfr = 0.0
+        // treynor = (0.04 - 0.0) / -1.0 = -0.04
+        val treynor = FinancialCalculations.calculateTreynor(
+            annualizedReturn = 0.04, riskFreeRate = 0.0, beta = -1.0
+        )
+        assertEquals(-0.04, treynor, 0.0001)
+    }
+
+    @Test
+    fun `calculateTreynor with return below risk free rate returns negative`() {
+        // treynor = (0.02 - 0.04) / 1.0 = -0.02
+        val treynor = FinancialCalculations.calculateTreynor(
+            annualizedReturn = 0.02, riskFreeRate = 0.04, beta = 1.0
+        )
+        assertEquals(-0.02, treynor, 0.0001)
+    }
+
+    @Test
+    fun `calculateTreynor throws when beta is zero`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateTreynor(
+                annualizedReturn = 0.12, riskFreeRate = 0.04, beta = 0.0
+            )
+        }
+    }
+
+    // --- Information Ratio ---
+
+    @Test
+    fun `calculateInformationRatio with consistent outperformance returns positive IR`() {
+        val benchmarkReturns = listOf(0.01, -0.005, 0.02, -0.01, 0.005, -0.015, 0.03)
+        val targetReturns = benchmarkReturns.map { it + 0.001 }
+
+        val ir = FinancialCalculations.calculateInformationRatio(targetReturns, benchmarkReturns)
+
+        assert(ir > 0) { "IR should be positive with consistent outperformance" }
+        assert(ir.isFinite()) { "IR must be finite" }
+    }
+
+    @Test
+    fun `calculateInformationRatio with consistent underperformance returns negative IR`() {
+        val benchmarkReturns = listOf(0.01, -0.005, 0.02, -0.01, 0.005, -0.015, 0.03)
+        val targetReturns = benchmarkReturns.map { it - 0.001 }
+
+        val ir = FinancialCalculations.calculateInformationRatio(targetReturns, benchmarkReturns)
+
+        assert(ir < 0) { "IR should be negative with consistent underperformance" }
+        assert(ir.isFinite()) { "IR must be finite" }
+    }
+
+    @Test
+    fun `calculateInformationRatio consistent outperformer beats volatile outperformer`() {
+        val benchmarkReturns = listOf(0.01, -0.005, 0.02, -0.01, 0.005, -0.015, 0.03)
+        val consistentTarget = benchmarkReturns.map { it + 0.001 }
+        val volatileTarget = listOf(0.08, -0.06, 0.09, -0.07, 0.08, -0.06, 0.10)
+
+        val consistentIR = FinancialCalculations.calculateInformationRatio(consistentTarget, benchmarkReturns)
+        val volatileIR = FinancialCalculations.calculateInformationRatio(volatileTarget, benchmarkReturns)
+
+        assert(consistentIR > volatileIR) {
+            "Consistent outperformer ($consistentIR) should have higher IR than volatile ($volatileIR)"
+        }
+    }
+
+    @Test
+    fun `calculateInformationRatio throws when tracking error is zero`() {
+        val returns = listOf(0.01, -0.005, 0.02, -0.01, 0.005)
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateInformationRatio(returns, returns)
+        }
+    }
+
+    @Test
+    fun `calculateInformationRatio throws when series lengths differ`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateInformationRatio(listOf(0.01, 0.02), listOf(0.01))
+        }
+    }
+
+    @Test
+    fun `calculateInformationRatio throws when returns list is empty`() {
+        assertThrows<IllegalArgumentException> {
+            FinancialCalculations.calculateInformationRatio(emptyList(), emptyList())
+        }
+    }
 }

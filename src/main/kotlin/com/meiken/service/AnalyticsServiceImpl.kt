@@ -14,6 +14,8 @@ import com.meiken.model.DailyReturn
 import com.meiken.model.DrawdownData
 import com.meiken.model.DrawdownMetadata
 import com.meiken.model.DrawdownResponse
+import com.meiken.model.InformationRatioMetadata
+import com.meiken.model.InformationRatioResponse
 import com.meiken.model.MomentumMetadata
 import com.meiken.model.MomentumResponse
 import com.meiken.model.MovingAverageMetadata
@@ -28,6 +30,8 @@ import com.meiken.model.SharpeMetadata
 import com.meiken.model.SharpeResponse
 import com.meiken.model.SortinoMetadata
 import com.meiken.model.SortinoResponse
+import com.meiken.model.TreynorMetadata
+import com.meiken.model.TreynorResponse
 import com.meiken.model.VolatilityData
 import com.meiken.model.VolatilityMetadata
 import com.meiken.model.VolatilityResponse
@@ -514,6 +518,93 @@ class AnalyticsServiceImpl(
                 outlierCount = analytics.outlierCount,
                 missingDays = analytics.missingDays,
                 warnings = drawdownWarnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Treynor from cached data: (annualizedReturn - riskFreeRate) / beta. Return per unit of systematic risk. */
+    override suspend fun calculateTreynor(
+        symbol: String,
+        benchmark: String,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        riskFreeRate: Double
+    ): TreynorResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        val symbolAnalyticsDeferred = async { analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService) }
+        val benchmarkAnalyticsDeferred = async { analyticsCache.getOrCompute(benchmark, fromDate, toDate, marketDataService) }
+        val symbolAnalytics = symbolAnalyticsDeferred.await()
+        val benchmarkAnalytics = benchmarkAnalyticsDeferred.await()
+        val (alignedSymbol, alignedBenchmark) = alignReturnsByDate(symbolAnalytics.dailyReturns, benchmarkAnalytics.dailyReturns)
+        require(alignedSymbol.size >= 2) { "Insufficient overlapping data for Treynor ratio calculation" }
+        val symbolValues = alignedSymbol.map { it.returnValue }
+        val benchmarkValues = alignedBenchmark.map { it.returnValue }
+        val beta = FinancialCalculations.calculateBeta(symbolValues, benchmarkValues)
+        require(beta != 0.0) { "Beta is zero; Treynor ratio undefined" }
+        val treynor = FinancialCalculations.calculateTreynor(symbolAnalytics.annualizedReturn, riskFreeRate, beta)
+        val worstQuality = listOf(symbolAnalytics.dataQuality, benchmarkAnalytics.dataQuality)
+            .minByOrNull { when (it) { "POOR" -> 0; "ACCEPTABLE" -> 1; else -> 2 } } ?: "GOOD"
+        val warnings = (symbolAnalytics.warnings + benchmarkAnalytics.warnings).distinct() +
+            listOfNotNull(OutputValidator.checkTreynor(treynor))
+        TreynorResponse(
+            symbol = symbol,
+            benchmark = benchmark,
+            fromDate = fromDate,
+            toDate = toDate,
+            treynor = treynor,
+            annualizedReturn = symbolAnalytics.annualizedReturn,
+            beta = beta,
+            riskFreeRate = riskFreeRate,
+            metadata = TreynorMetadata(
+                dataPoints = alignedSymbol.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = worstQuality,
+                outlierCount = symbolAnalytics.outlierCount + benchmarkAnalytics.outlierCount,
+                missingDays = symbolAnalytics.missingDays + benchmarkAnalytics.missingDays,
+                warnings = warnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /** Information ratio from cached data: annualized active return / annualized tracking error. */
+    override suspend fun calculateInformationRatio(
+        target: String,
+        benchmark: String,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): InformationRatioResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        val targetAnalyticsDeferred = async { analyticsCache.getOrCompute(target, fromDate, toDate, marketDataService) }
+        val benchmarkAnalyticsDeferred = async { analyticsCache.getOrCompute(benchmark, fromDate, toDate, marketDataService) }
+        val targetAnalytics = targetAnalyticsDeferred.await()
+        val benchmarkAnalytics = benchmarkAnalyticsDeferred.await()
+        val (alignedTarget, alignedBenchmark) = alignReturnsByDate(targetAnalytics.dailyReturns, benchmarkAnalytics.dailyReturns)
+        require(alignedTarget.size >= 2) { "Insufficient overlapping data for information ratio calculation" }
+        val targetValues = alignedTarget.map { it.returnValue }
+        val benchmarkValues = alignedBenchmark.map { it.returnValue }
+        val ir = FinancialCalculations.calculateInformationRatio(targetValues, benchmarkValues)
+        val activeReturns = targetValues.zip(benchmarkValues).map { (t, b) -> t - b }
+        val annualizedActiveReturn = FinancialCalculations.annualizeReturn(activeReturns.average())
+        val trackingError = StatisticalCalculations.standardDeviation(activeReturns) * kotlin.math.sqrt(252.0)
+        val worstQuality = listOf(targetAnalytics.dataQuality, benchmarkAnalytics.dataQuality)
+            .minByOrNull { when (it) { "POOR" -> 0; "ACCEPTABLE" -> 1; else -> 2 } } ?: "GOOD"
+        val warnings = (targetAnalytics.warnings + benchmarkAnalytics.warnings).distinct() +
+            listOfNotNull(OutputValidator.checkInformationRatio(ir))
+        InformationRatioResponse(
+            target = target,
+            benchmark = benchmark,
+            fromDate = fromDate,
+            toDate = toDate,
+            informationRatio = ir,
+            annualizedActiveReturn = annualizedActiveReturn,
+            trackingError = trackingError,
+            metadata = InformationRatioMetadata(
+                dataPoints = alignedTarget.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = worstQuality,
+                outlierCount = targetAnalytics.outlierCount + benchmarkAnalytics.outlierCount,
+                missingDays = targetAnalytics.missingDays + benchmarkAnalytics.missingDays,
+                warnings = warnings.ifEmpty { null }
             )
         )
     }

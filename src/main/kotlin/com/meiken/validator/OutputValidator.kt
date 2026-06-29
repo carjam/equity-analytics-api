@@ -71,4 +71,16 @@ object OutputValidator {
         value < -10.0 || value > 10.0 -> "calmar_implausible=%.2f".format(value)
         else -> null
     }
+
+    fun checkTreynor(value: Double): String? = when {
+        !value.isFinite() -> "treynor_not_finite"
+        value < SHARPE_MIN || value > SHARPE_MAX -> "treynor_implausible=%.2f".format(value)
+        else -> null
+    }
+
+    fun checkInformationRatio(value: Double): String? = when {
+        !value.isFinite() -> "information_ratio_not_finite"
+        value < SHARPE_MIN || value > SHARPE_MAX -> "information_ratio_implausible=%.2f".format(value)
+        else -> null
+    }
 }

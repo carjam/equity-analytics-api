@@ -280,6 +280,38 @@ object FinancialCalculations {
     }
 
     /**
+     * Treynor Ratio: (annualized return - risk free rate) / beta.
+     * Measures return per unit of systematic (market) risk.
+     * Unlike Sharpe, uses beta rather than total volatility as the risk denominator.
+     */
+    fun calculateTreynor(annualizedReturn: Double, riskFreeRate: Double, beta: Double): Double {
+        require(beta != 0.0) { "Beta cannot be zero for Treynor ratio calculation" }
+        return (annualizedReturn - riskFreeRate) / beta
+    }
+
+    /**
+     * Information Ratio: annualized active return / annualized tracking error.
+     * Active return = target_return - benchmark_return per period.
+     * Tracking error = std_dev(active_returns) * sqrt(tradingDays) (annualized).
+     * Measures how consistently alpha is generated relative to its variability.
+     */
+    fun calculateInformationRatio(
+        targetReturns: List<Double>,
+        benchmarkReturns: List<Double>,
+        tradingDays: Int = 252
+    ): Double {
+        require(targetReturns.isNotEmpty()) { "Returns list cannot be empty" }
+        require(targetReturns.size == benchmarkReturns.size) { "Must have same number of returns" }
+
+        val activeReturns = targetReturns.zip(benchmarkReturns).map { (t, b) -> t - b }
+        val annualizedActiveReturn = annualizeReturn(activeReturns.average(), tradingDays)
+        val trackingError = StatisticalCalculations.standardDeviation(activeReturns) * sqrt(tradingDays.toDouble())
+
+        require(trackingError != 0.0) { "Tracking error cannot be zero for information ratio calculation" }
+        return annualizedActiveReturn / trackingError
+    }
+
+    /**
      * Relative Strength: measures relative performance of target vs benchmark over the period.
      * RS = (target_end / target_start) / (benchmark_end / benchmark_start) - 1
      * Positive values indicate outperformance, negative indicate underperformance.

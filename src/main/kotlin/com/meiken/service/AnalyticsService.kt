@@ -4,16 +4,18 @@ import com.meiken.model.BetaResponse
 import com.meiken.model.CalmarResponse
 import com.meiken.model.CorrelationResponse
 import com.meiken.model.DrawdownResponse
+import com.meiken.model.InformationRatioResponse
 import com.meiken.model.RelativeStrengthResponse
 import com.meiken.model.MomentumResponse
 import com.meiken.model.MovingAverageResponse
 import com.meiken.model.SharpeResponse
 import com.meiken.model.SortinoResponse
+import com.meiken.model.TreynorResponse
 import com.meiken.model.VolatilityResponse
 import com.meiken.model.ZScoreResponse
 import kotlinx.datetime.LocalDate
 
-/** Service for volatility, beta, Sharpe ratio, Sortino ratio, Calmar ratio, momentum, moving averages, price levels, Z-score, drawdown, and rolling correlation analytics. All metrics use close-of-day prices only. */
+/** Service for volatility, beta, Sharpe ratio, Sortino ratio, Calmar ratio, momentum, moving averages, price levels, Z-score, drawdown, rolling correlation, Treynor ratio, and information ratio analytics. All metrics use close-of-day prices only. */
 interface AnalyticsService {
     /** Daily and annualized volatility (std dev of close-to-close daily returns) for the symbol. */
     suspend fun calculateVolatility(symbol: String, fromDate: LocalDate, toDate: LocalDate): VolatilityResponse
@@ -39,4 +41,8 @@ interface AnalyticsService {
     suspend fun calculateCorrelation(ticker1: String, ticker2: String, fromDate: LocalDate, toDate: LocalDate, window: Int): CorrelationResponse
     /** Maximum drawdown: largest peak-to-trough decline as percentage from close prices. */
     suspend fun calculateDrawdown(symbol: String, fromDate: LocalDate, toDate: LocalDate): DrawdownResponse
+    /** Treynor ratio: (annualized return - riskFreeRate) / beta. Return per unit of systematic risk. */
+    suspend fun calculateTreynor(symbol: String, benchmark: String, fromDate: LocalDate, toDate: LocalDate, riskFreeRate: Double): TreynorResponse
+    /** Information ratio: annualized active return / annualized tracking error. Measures consistency of alpha. */
+    suspend fun calculateInformationRatio(target: String, benchmark: String, fromDate: LocalDate, toDate: LocalDate): InformationRatioResponse
 }

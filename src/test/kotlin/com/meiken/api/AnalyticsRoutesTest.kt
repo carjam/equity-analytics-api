@@ -173,4 +173,78 @@ class AnalyticsRoutesTest {
         val response = client.get("/api/v1/tickers/TOOLONG/drawdown")
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
+
+    @Test
+    fun `treynor returns 200 with valid JSON`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/treynor?benchmark=SPY")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("symbol"))
+        assertTrue(body.contains("treynor"))
+        assertTrue(body.contains("beta"))
+        assertTrue(body.contains("riskFreeRate"))
+        val json = Json.parseToJsonElement(body).jsonObject
+        assertEquals("AAPL", json["symbol"]?.jsonPrimitive?.content)
+        assertEquals("SPY", json["benchmark"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `treynor with custom risk_free_rate`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/treynor?benchmark=SPY&risk_free_rate=0.02")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("0.02", json["riskFreeRate"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `treynor missing benchmark returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/treynor")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `treynor invalid symbol returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/TOOLONG/treynor?benchmark=SPY")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `information ratio returns 200 with valid JSON`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/information-ratio?target=AAPL&benchmark=SPY")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("target"))
+        assertTrue(body.contains("benchmark"))
+        assertTrue(body.contains("informationRatio"))
+        assertTrue(body.contains("trackingError"))
+        val json = Json.parseToJsonElement(body).jsonObject
+        assertEquals("AAPL", json["target"]?.jsonPrimitive?.content)
+        assertEquals("SPY", json["benchmark"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `information ratio missing target returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/information-ratio?benchmark=SPY")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `information ratio missing benchmark returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/information-ratio?target=AAPL")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
 }
