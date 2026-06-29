@@ -1,6 +1,8 @@
 # Manual Test Validation for Equity Analytics API Financial Calculator
 
-This document outlines all 8 test cases and their expected outcomes.
+> **Note:** This document captures the 8 original hand-verification test cases written at project inception. The full automated test suite now contains 286 tests covering all endpoints, calculations, edge cases, and error paths. Run `./gradlew test` for the authoritative results; `build/reports/tests/test/index.html` has the full breakdown.
+
+This document outlines the original 8 foundational test cases and their expected outcomes.
 
 ## Test 1: calculateDailyReturns with simple increasing prices
 
@@ -144,7 +146,7 @@ val riskFreeRate = 0.04
 
 ## Summary
 
-All 8 tests validate:
+These 8 foundational cases validate core formulas:
 
 | Aspect | Coverage |
 |--------|----------|
@@ -154,4 +156,4 @@ All 8 tests validate:
 | Formula Accuracy | ✅ 8 tests |
 | Numerical Precision | ✅ 8 tests |
 
-**Expected Result:** 8/8 tests pass with 0 failures
+**Full suite:** 286 automated tests, 0 failures. Run `./gradlew test` to verify.

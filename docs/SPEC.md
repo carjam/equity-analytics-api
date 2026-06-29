@@ -197,6 +197,111 @@ For each price, track running peak. drawdown_t = (peak - price_t) / peak.
 maxDrawdown = max(drawdown_t) over all t.
 ```
 
+#### 3.8 Get Momentum (Rate of Change)
+**Endpoint**: `GET /api/v1/tickers/{symbol}/momentum`
+
+**Query Parameters**:
+- `lookback` (optional): comma-separated list of lookback periods in trading days (default: `20`; max per value: 252)
+
+Percentage price change over a lookback period. Returns a time series of ROC values per lookback.
+
+**ROC Calculation**:
+```
+roc[t] = (price[t] - price[t - lookback]) / price[t - lookback]
+```
+
+#### 3.9 Get Moving Averages
+**Endpoint**: `GET /api/v1/tickers/{symbol}/moving-averages`
+
+**Query Parameters**:
+- `window` (optional): comma-separated list of window sizes in trading days (default: `20,50,200`; max per value: 252)
+
+Simple moving average (SMA) over each specified window.
+
+**SMA Calculation**:
+```
+sma[t] = mean(price[t-window+1] ... price[t])
+```
+
+#### 3.10 Get 52-Week Price Levels
+**Endpoint**: `GET /api/v1/tickers/{symbol}/price-levels`
+
+Current price vs 52-week high and low (or all available data if fewer than 252 trading days), with percentage distances.
+
+**Response fields**: `current`, `currentDate`, `high52Week`, `high52WeekDate`, `low52Week`, `low52WeekDate`, `distanceFromHigh`, `distanceFromLow`.
+
+#### 3.11 Get Z-Score
+**Endpoint**: `GET /api/v1/tickers/{symbol}/z-score`
+
+**Query Parameters**:
+- `window` (optional): rolling window in trading days (default: `60`; range: 2–252)
+
+Standard deviations of the current price from the mean over the window. Mean-reversion signal: |z| > 2 suggests extreme price displacement.
+
+**Z-Score Calculation**:
+```
+z = (current_price - mean(price[last window days])) / std_dev(price[last window days])
+```
+
+#### 3.12 Get Relative Strength
+**Endpoint**: `GET /api/v1/relative-strength`
+
+**Query Parameters**:
+- `target` (required): target ticker symbol
+- `benchmark` (required): benchmark ticker symbol
+- `from_date`, `to_date` (optional): date range
+
+Cumulative return of the target relative to the benchmark over the period. Positive = outperformance.
+
+**Relative Strength Calculation**:
+```
+relative_strength = (target_end / target_start) / (benchmark_end / benchmark_start) - 1
+```
+
+#### 3.13 Get Treynor Ratio
+**Endpoint**: `GET /api/v1/tickers/{symbol}/treynor`
+
+**Query Parameters**:
+- `benchmark` (required): benchmark ticker symbol
+- `risk_free_rate` (optional): annual risk-free rate (default: from config, typically 0.04)
+- `from_date`, `to_date` (optional): date range
+
+Return per unit of systematic (market) risk. Unlike Sharpe, uses beta rather than total volatility as the risk denominator.
+
+**Treynor Calculation**:
+```
+treynor = (annualized_return - risk_free_rate) / beta
+```
+
+#### 3.14 Get Information Ratio
+**Endpoint**: `GET /api/v1/information-ratio`
+
+**Query Parameters**:
+- `target` (required): target ticker symbol
+- `benchmark` (required): benchmark ticker symbol
+- `from_date`, `to_date` (optional): date range
+
+Measures how consistently the target generates alpha relative to the benchmark. Higher IR = more consistent outperformance.
+
+**Information Ratio Calculation**:
+```
+active_returns[t] = target_return[t] - benchmark_return[t]
+annualized_active_return = (1 + mean(active_returns))^252 - 1
+tracking_error = std_dev(active_returns) * sqrt(252)
+information_ratio = annualized_active_return / tracking_error
+```
+
+#### 3.15 Get Screener Summary
+**Endpoint**: `GET /api/v1/tickers/{symbol}/summary`
+
+**Query Parameters**:
+- `risk_free_rate` (optional): annual risk-free rate (default: from config)
+- `from_date`, `to_date` (optional): date range
+
+All key single-symbol metrics in a single response. Designed for stock screener clients that need a complete snapshot without multiple round-trips. Includes: volatility, Sharpe, Sortino, Calmar (`null` when infinite), max drawdown, momentum ROC at 20- and 60-day lookbacks, SMAs at 20- and 50-day windows (lookbacks/windows capped to available history), 52-week price levels, and Z-score (default 60-day window).
+
+Benchmark-relative metrics (beta, Treynor, information ratio, relative strength) are intentionally excluded; clients use the dedicated two-symbol endpoints for those.
+
 ---
 
 ## Cross-Cutting Concerns

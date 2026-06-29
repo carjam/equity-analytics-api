@@ -71,7 +71,10 @@ fun Route.analyticsRoutes(analyticsService, defaultsConfig, maxStringLength)
 data class Returns(symbol, fromDate, toDate, dailyReturns, metadata)
 data class Alpha(target, benchmark, fromDate, toDate, alpha, metadata)
 // Plus VolatilityResponse, SharpeResponse, BetaResponse, CorrelationResponse,
-//      SortinoResponse, CalmarResponse, DrawdownResponse, MomentumResponse
+//      SortinoResponse, CalmarResponse, DrawdownResponse, MomentumResponse,
+//      MovingAverageResponse, PriceLevelsResponse, ZScoreResponse,
+//      RelativeStrengthResponse, TreynorResponse, InformationRatioResponse,
+//      ScreenerSummaryResponse
 ```
 
 ### 2. Service Layer (`service` package)
@@ -104,12 +107,19 @@ interface AlphaService {
 interface AnalyticsService {
     suspend fun calculateVolatility(symbol, fromDate, toDate): VolatilityResponse
     suspend fun calculateSharpe(symbol, fromDate, toDate, riskFreeRate): SharpeResponse
-    suspend fun calculateBeta(target, benchmark, fromDate, toDate): BetaResponse
-    suspend fun calculateCorrelation(ticker1, ticker2, fromDate, toDate, window): CorrelationResponse
     suspend fun calculateSortino(symbol, fromDate, toDate, riskFreeRate): SortinoResponse
     suspend fun calculateCalmar(symbol, fromDate, toDate): CalmarResponse
     suspend fun calculateDrawdown(symbol, fromDate, toDate): DrawdownResponse
     suspend fun calculateMomentum(symbol, fromDate, toDate, lookbacks): MomentumResponse
+    suspend fun calculateMovingAverages(symbol, fromDate, toDate, windows): MovingAverageResponse
+    suspend fun calculatePriceLevels(symbol, fromDate, toDate): PriceLevelsResponse
+    suspend fun calculateZScore(symbol, fromDate, toDate, window): ZScoreResponse
+    suspend fun calculateBeta(target, benchmark, fromDate, toDate): BetaResponse
+    suspend fun calculateRelativeStrength(target, benchmark, fromDate, toDate): RelativeStrengthResponse
+    suspend fun calculateCorrelation(ticker1, ticker2, fromDate, toDate, window): CorrelationResponse
+    suspend fun calculateTreynor(symbol, benchmark, fromDate, toDate, riskFreeRate): TreynorResponse
+    suspend fun calculateInformationRatio(target, benchmark, fromDate, toDate): InformationRatioResponse
+    suspend fun calculateSummary(symbol, fromDate, toDate, riskFreeRate): ScreenerSummaryResponse
 }
 ```
 
@@ -133,6 +143,12 @@ object FinancialCalculations {
     fun calculateCalmar(annualizedReturn: Double, maxDrawdown: Double): Double
     fun calculateMaxDrawdown(prices: List<DailyPrice>): MaxDrawdownResult
     fun calculateRateOfChange(prices: List<DailyPrice>, lookback: Int): List<RateOfChangeData>
+    fun calculateMovingAverage(prices: List<DailyPrice>, window: Int): List<MovingAverageData>
+    fun calculate52WeekLevels(prices: List<DailyPrice>): PriceLevelsResult
+    fun calculateZScore(prices: List<DailyPrice>, window: Int): Double
+    fun calculateRelativeStrength(targetPrices: List<DailyPrice>, benchmarkPrices: List<DailyPrice>): Double
+    fun calculateTreynor(annualizedReturn: Double, riskFreeRate: Double, beta: Double): Double
+    fun calculateInformationRatio(targetReturns: List<Double>, benchmarkReturns: List<Double>, tradingDays: Int = 252): Double
     // Scalar overload for OLS alpha; list overload uses geometric mean
     fun annualizeReturn(avgDailyReturn: Double, tradingDays: Int = 252): Double
     fun annualizeReturn(returns: List<Double>, tradingDays: Int = 252): Double
