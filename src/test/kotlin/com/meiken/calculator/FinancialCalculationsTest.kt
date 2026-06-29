@@ -371,11 +371,26 @@ class FinancialCalculationsTest {
     fun `calculateSortino throws when all returns equal zero returns`() {
         // If annualized return equals risk-free rate, numerator is zero but denominator > 0
         val constantReturns = listOf(0.0, 0.0, 0.0, 0.0)
-        
+
         val sortino = FinancialCalculations.calculateSortino(constantReturns, riskFreeRate = 0.0)
-        
+
         // This should return 0.0 (no excess return, but denominator is defined)
         assertEquals(0.0, sortino, 0.001)
+    }
+
+    @Test
+    fun `calculateSortino pre-computed overload produces identical result to returns overload`() {
+        // The pre-computed overload (used by service layer for cache consistency) must give the
+        // same answer as the returns overload when given annualizeReturn(returns) as the scalar.
+        val returns = listOf(0.10, 0.05, -0.05, 0.08, -0.03)
+        val riskFreeRate = 0.02
+        val annualizedReturn = FinancialCalculations.annualizeReturn(returns)
+
+        val fromReturns = FinancialCalculations.calculateSortino(returns, riskFreeRate)
+        val fromPrecomputed = FinancialCalculations.calculateSortino(annualizedReturn, returns, riskFreeRate)
+
+        assertEquals(fromReturns, fromPrecomputed, 1e-10,
+            "Pre-computed overload must equal returns overload when given the same annualized return")
     }
 
     @Test

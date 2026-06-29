@@ -178,8 +178,8 @@ class AnalyticsServiceImpl(
         } else {
             analytics.dailyReturns.map { it.returnValue }
         }
-        
-        val sortino = FinancialCalculations.calculateSortino(returnValues, riskFreeRate)
+
+        val sortino = FinancialCalculations.calculateSortino(analytics.annualizedReturn, returnValues, riskFreeRate)
         val sortinoWarnings = analytics.warnings + listOfNotNull(OutputValidator.checkSortino(sortino))
         SortinoResponse(
             symbol = symbol,
@@ -632,7 +632,7 @@ class AnalyticsServiceImpl(
             analytics.calculationReturnValues else analytics.dailyReturns.map { it.returnValue }
 
         val sharpe = (analytics.annualizedReturn - riskFreeRate) / analytics.annualizedVolatility
-        val sortino = FinancialCalculations.calculateSortino(returnValues, riskFreeRate)
+        val sortino = FinancialCalculations.calculateSortino(analytics.annualizedReturn, returnValues, riskFreeRate)
         val drawdownResult = FinancialCalculations.calculateMaxDrawdown(analytics.dailyPrices)
         val calmarRaw = FinancialCalculations.calculateCalmar(analytics.annualizedReturn, drawdownResult.maxDrawdown)
         val calmar = if (calmarRaw.isInfinite() || calmarRaw.isNaN()) null else calmarRaw

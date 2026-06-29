@@ -98,23 +98,29 @@ object FinancialCalculations {
      * Like Sharpe ratio, but only penalizes downside volatility (returns below zero).
      * Uses semi-deviation of negative returns only, annualized.
      */
-    fun calculateSortino(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double {
+    fun calculateSortino(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double =
+        calculateSortino(annualizeReturn(returns, tradingDays), returns, riskFreeRate, tradingDays)
+
+    /**
+     * Cache-friendly Sortino overload: accepts a pre-computed [annualizedReturn] (e.g. from
+     * [com.meiken.cache.SymbolAnalytics.annualizedReturn]) and derives only the downside deviation
+     * from [returns]. Consistent with the Sharpe pattern — reuse the cached scalar rather than
+     * recomputing it from the same series. Only call this when [annualizedReturn] was computed
+     * from the same [returns] series (or its winsorized counterpart) to keep numerator and
+     * denominator on the same dataset.
+     */
+    fun calculateSortino(annualizedReturn: Double, returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double {
         require(returns.isNotEmpty()) { "Returns list cannot be empty" }
-        
-        val annualizedReturn = annualizeReturn(returns, tradingDays)
+
         val downsideReturns = returns.filter { it < 0.0 }
-        
-        // If no downside returns, downside deviation is zero (perfect upside-only)
-        // Return positive infinity would be mathematically correct, but we use a large number
+
         if (downsideReturns.isEmpty()) {
             return if (annualizedReturn > riskFreeRate) Double.MAX_VALUE / 1e10 else 0.0
         }
-        
-        // Semi-deviation: sqrt(mean(negative_returns^2))
+
         val downsideSemiVariance = downsideReturns.map { it * it }.average()
-        val dailyDownsideDeviation = sqrt(downsideSemiVariance)
-        val annualizedDownsideDeviation = dailyDownsideDeviation * sqrt(tradingDays.toDouble())
-        
+        val annualizedDownsideDeviation = sqrt(downsideSemiVariance) * sqrt(tradingDays.toDouble())
+
         require(annualizedDownsideDeviation != 0.0) { "Downside deviation cannot be zero" }
         return (annualizedReturn - riskFreeRate) / annualizedDownsideDeviation
     }
