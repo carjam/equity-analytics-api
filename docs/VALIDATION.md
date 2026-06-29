@@ -1,6 +1,6 @@
 # Manual Test Validation for Equity Analytics API Financial Calculator
 
-> **Note:** This document captures the 8 original hand-verification test cases written at project inception. The full automated test suite now contains 286 tests covering all endpoints, calculations, edge cases, and error paths. Run `./gradlew test` for the authoritative results; `build/reports/tests/test/index.html` has the full breakdown.
+> **Note:** This document captures the 8 original hand-verification test cases written at project inception. The full automated test suite now contains 287 tests covering all endpoints, calculations, edge cases, and error paths. Run `./gradlew test` for the authoritative results; `build/reports/tests/test/index.html` has the full breakdown.
 
 This document outlines the original 8 foundational test cases and their expected outcomes.
 

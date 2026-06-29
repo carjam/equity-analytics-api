@@ -140,6 +140,7 @@ object FinancialCalculations {
     fun calculateVolatility(returns: List<Double>, tradingDays: Int = 252): Pair<Double, Double>  // daily, annualized
     fun calculateSharpe(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double
     fun calculateSortino(returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double
+    fun calculateSortino(annualizedReturn: Double, returns: List<Double>, riskFreeRate: Double = 0.04, tradingDays: Int = 252): Double  // cache-friendly: pass pre-computed scalar
     fun calculateCalmar(annualizedReturn: Double, maxDrawdown: Double): Double
     fun calculateMaxDrawdown(prices: List<DailyPrice>): MaxDrawdownResult
     fun calculateRateOfChange(prices: List<DailyPrice>, lookback: Int): List<RateOfChangeData>
