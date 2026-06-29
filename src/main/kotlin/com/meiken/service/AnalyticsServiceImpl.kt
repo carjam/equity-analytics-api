@@ -16,6 +16,8 @@ import com.meiken.model.DrawdownMetadata
 import com.meiken.model.DrawdownResponse
 import com.meiken.model.InformationRatioMetadata
 import com.meiken.model.InformationRatioResponse
+import com.meiken.model.ScreenerSummaryMetadata
+import com.meiken.model.ScreenerSummaryResponse
 import com.meiken.model.MomentumMetadata
 import com.meiken.model.MomentumResponse
 import com.meiken.model.MovingAverageMetadata
@@ -605,6 +607,93 @@ class AnalyticsServiceImpl(
                 outlierCount = targetAnalytics.outlierCount + benchmarkAnalytics.outlierCount,
                 missingDays = targetAnalytics.missingDays + benchmarkAnalytics.missingDays,
                 warnings = warnings.ifEmpty { null }
+            )
+        )
+    }
+
+    /**
+     * Screener summary: all key single-symbol metrics computed from a single cache entry.
+     * Uses lookbacks [20, 60] for momentum and windows [20, 50] for moving averages;
+     * entries are filtered to those computable from the available price history.
+     * Z-score uses a window of min(60, priceCount), at least 2.
+     */
+    override suspend fun calculateSummary(
+        symbol: String,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        riskFreeRate: Double
+    ): ScreenerSummaryResponse = coroutineScope {
+        validateDateRange(fromDate, toDate, maxDays)
+        val analytics = analyticsCache.getOrCompute(symbol, fromDate, toDate, marketDataService)
+        require(analytics.dailyReturns.size >= 2) { "Need at least 2 data points for summary" }
+        require(analytics.dailyPrices.isNotEmpty()) { "No price data available for summary" }
+
+        val returnValues = if (analytics.calculationReturnValues.isNotEmpty())
+            analytics.calculationReturnValues else analytics.dailyReturns.map { it.returnValue }
+
+        val sharpe = (analytics.annualizedReturn - riskFreeRate) / analytics.annualizedVolatility
+        val sortino = FinancialCalculations.calculateSortino(returnValues, riskFreeRate)
+        val drawdownResult = FinancialCalculations.calculateMaxDrawdown(analytics.dailyPrices)
+        val calmarRaw = FinancialCalculations.calculateCalmar(analytics.annualizedReturn, drawdownResult.maxDrawdown)
+        val calmar = if (calmarRaw.isInfinite() || calmarRaw.isNaN()) null else calmarRaw
+
+        val lookbackCandidates = listOf(20, 60)
+        val availableLookbacks = lookbackCandidates.filter { analytics.dailyPrices.size > it }
+        val latestMomentum = availableLookbacks.mapNotNull { lb ->
+            FinancialCalculations.calculateRateOfChange(analytics.dailyPrices, lb).lastOrNull()
+        }
+
+        val windowCandidates = listOf(20, 50)
+        val availableWindows = windowCandidates.filter { analytics.dailyPrices.size >= it }
+        val latestMa = availableWindows.mapNotNull { w ->
+            FinancialCalculations.calculateMovingAverage(analytics.dailyPrices, w).lastOrNull()
+        }
+
+        val priceLevelsResult = FinancialCalculations.calculate52WeekLevels(analytics.dailyPrices)
+        val zWindow = minOf(60, analytics.dailyPrices.size).coerceAtLeast(2)
+        val zScore = FinancialCalculations.calculateZScore(analytics.dailyPrices, zWindow)
+
+        val allWarnings = analytics.warnings +
+            listOfNotNull(
+                OutputValidator.checkSharpe(sharpe),
+                OutputValidator.checkSortino(sortino),
+                OutputValidator.checkMaxDrawdown(drawdownResult.maxDrawdown),
+                OutputValidator.checkAnnualizedVolatility(analytics.annualizedVolatility)
+            )
+
+        ScreenerSummaryResponse(
+            symbol = symbol,
+            fromDate = fromDate,
+            toDate = toDate,
+            volatility = VolatilityData(
+                daily = analytics.dailyVolatility,
+                annualized = analytics.annualizedVolatility
+            ),
+            sharpe = sharpe,
+            sortino = sortino,
+            calmar = calmar,
+            maxDrawdown = drawdownResult.maxDrawdown,
+            momentum = latestMomentum,
+            movingAverages = latestMa,
+            priceLevels = PriceLevels(
+                current = priceLevelsResult.current,
+                currentDate = priceLevelsResult.currentDate,
+                high52Week = priceLevelsResult.high52Week,
+                high52WeekDate = priceLevelsResult.high52WeekDate,
+                low52Week = priceLevelsResult.low52Week,
+                low52WeekDate = priceLevelsResult.low52WeekDate,
+                distanceFromHigh = priceLevelsResult.distanceFromHigh,
+                distanceFromLow = priceLevelsResult.distanceFromLow
+            ),
+            zScore = zScore,
+            riskFreeRate = riskFreeRate,
+            metadata = ScreenerSummaryMetadata(
+                dataPoints = analytics.dailyPrices.size,
+                source = DEFAULT_SOURCE,
+                dataQuality = analytics.dataQuality,
+                outlierCount = analytics.outlierCount,
+                missingDays = analytics.missingDays,
+                warnings = allWarnings.ifEmpty { null }
             )
         )
     }

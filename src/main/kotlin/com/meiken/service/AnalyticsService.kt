@@ -8,6 +8,7 @@ import com.meiken.model.InformationRatioResponse
 import com.meiken.model.RelativeStrengthResponse
 import com.meiken.model.MomentumResponse
 import com.meiken.model.MovingAverageResponse
+import com.meiken.model.ScreenerSummaryResponse
 import com.meiken.model.SharpeResponse
 import com.meiken.model.SortinoResponse
 import com.meiken.model.TreynorResponse
@@ -45,4 +46,6 @@ interface AnalyticsService {
     suspend fun calculateTreynor(symbol: String, benchmark: String, fromDate: LocalDate, toDate: LocalDate, riskFreeRate: Double): TreynorResponse
     /** Information ratio: annualized active return / annualized tracking error. Measures consistency of alpha. */
     suspend fun calculateInformationRatio(target: String, benchmark: String, fromDate: LocalDate, toDate: LocalDate): InformationRatioResponse
+    /** Screener summary: all key single-symbol metrics in one call (volatility, Sharpe, Sortino, Calmar, drawdown, momentum, moving averages, price levels, Z-score). */
+    suspend fun calculateSummary(symbol: String, fromDate: LocalDate, toDate: LocalDate, riskFreeRate: Double): ScreenerSummaryResponse
 }

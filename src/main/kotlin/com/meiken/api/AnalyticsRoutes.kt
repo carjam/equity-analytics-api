@@ -25,6 +25,7 @@ import io.ktor.server.routing.route
  * - GET tickers/{symbol}/z-score (optional from_date, to_date, window; default window=60)
  * - GET tickers/{symbol}/drawdown (optional from_date, to_date; default YTD)
  * - GET tickers/{symbol}/treynor?benchmark= (optional risk_free_rate, from_date, to_date)
+ * - GET tickers/{symbol}/summary (optional risk_free_rate, from_date, to_date; all key metrics in one call)
  * - GET beta?target=&benchmark= (optional from_date, to_date)
  * - GET relative-strength?target=&benchmark= (optional from_date, to_date)
  * - GET information-ratio?target=&benchmark= (optional from_date, to_date)
@@ -170,6 +171,19 @@ fun Route.analyticsRoutes(
                     val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
                         ?: getToday()
                     val response = analyticsService.calculateDrawdown(symbol, fromDate, toDate)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+            }
+            route("summary") {
+                get {
+                    val symbol = InputValidator.validateSymbol(call.parameters["symbol"], maxLength = maxStringLength)
+                    val riskFreeRate = call.request.queryParameters["risk_free_rate"]?.toDoubleOrNull()
+                        ?: riskFreeRateDefault
+                    val fromDate = call.request.queryParameters["from_date"]?.let { InputValidator.validateDate(it, "from_date", maxLength = maxStringLength) }
+                        ?: getCurrentYearStart()
+                    val toDate = call.request.queryParameters["to_date"]?.let { InputValidator.validateDate(it, "to_date", maxLength = maxStringLength) }
+                        ?: getToday()
+                    val response = analyticsService.calculateSummary(symbol, fromDate, toDate, riskFreeRate)
                     call.respond(HttpStatusCode.OK, response)
                 }
             }

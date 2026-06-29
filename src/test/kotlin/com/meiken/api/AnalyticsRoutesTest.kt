@@ -247,4 +247,40 @@ class AnalyticsRoutesTest {
         val response = client.get("/api/v1/information-ratio?target=AAPL")
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
+
+    @Test
+    fun `summary returns 200 with all key metrics`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/summary")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("symbol"))
+        assertTrue(body.contains("volatility"))
+        assertTrue(body.contains("sharpe"))
+        assertTrue(body.contains("sortino"))
+        assertTrue(body.contains("maxDrawdown"))
+        assertTrue(body.contains("priceLevels"))
+        assertTrue(body.contains("zScore"))
+        val json = Json.parseToJsonElement(body).jsonObject
+        assertEquals("AAPL", json["symbol"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `summary with custom risk_free_rate`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/AAPL/summary?risk_free_rate=0.05")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("0.05", json["riskFreeRate"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `summary invalid symbol returns 400`() = testApplication {
+        environment { config = MapApplicationConfig() }
+        application { module() }
+        val response = client.get("/api/v1/tickers/TOOLONG/summary")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
 }
